@@ -7,12 +7,16 @@ from app.core.csrf import CsrfMiddleware
 from app.core.errors import register_errors
 from app.core.rate_limit import redis_unavailable_error
 from app.db.engine import engine
+from app.modules.arco.router import router as arco_router
+from app.modules.audit.router import router as audit_router
 from app.modules.identity.router import router as identity_router
 
 app = FastAPI(title="NEXUS CRM")
 register_errors(app)
 app.add_middleware(CsrfMiddleware)
 app.include_router(identity_router)
+app.include_router(arco_router)
+app.include_router(audit_router)
 
 
 @app.get("/api/v1/healthz")

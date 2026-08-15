@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -6,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.identifiers import SCHEMA_NAME_RE
 from app.db.search_path import set_search_path
+
+
+def _iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        return value.isoformat() + "Z"
+    return value.isoformat().replace("+00:00", "Z")
 
 
 class AuditService:
@@ -64,3 +71,80 @@ class AuditService:
                 },
             )
         return event_id
+
+    async def list(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: UUID,
+        cursor_id: UUID | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        result = await session.execute(
+            text(
+                """
+                SELECT id, occurred_at, event_type, actor_email, ip_address
+                FROM catalog.platform_audit_events
+                WHERE (
+                    tenant_id = :tenant_id
+                    OR (
+                        tenant_id IS NULL
+                        AND event_type = 'auth.login.failure'
+                        AND lower(actor_email) IN (
+                            SELECT lower(ei.email)
+                            FROM catalog.email_identities ei
+                            JOIN catalog.users u ON u.id = ei.user_id
+                            WHERE u.tenant_id = :tenant_id
+                        )
+                    )
+                )
+                AND (
+                    CAST(:cursor_id AS uuid) IS NULL
+                    OR (occurred_at, id) < (
+                        SELECT e.occurred_at, e.id
+                        FROM catalog.platform_audit_events e
+                        WHERE e.id = CAST(:cursor_id AS uuid)
+                          AND (
+                            e.tenant_id = :tenant_id
+                            OR (
+                                e.tenant_id IS NULL
+                                AND e.event_type = 'auth.login.failure'
+                                AND lower(e.actor_email) IN (
+                                    SELECT lower(ei.email)
+                                    FROM catalog.email_identities ei
+                                    JOIN catalog.users u ON u.id = ei.user_id
+                                    WHERE u.tenant_id = :tenant_id
+                                )
+                            )
+                        )
+                    )
+                )
+                ORDER BY occurred_at DESC, id DESC
+                LIMIT :limit
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "cursor_id": cursor_id,
+                "limit": limit + 1,
+            },
+        )
+        rows = list(result.mappings())
+        next_cursor = None
+        if len(rows) > limit:
+            rows = rows[:limit]
+            next_cursor = str(rows[-1]["id"])
+        items = [
+            {
+                "id": str(row["id"]),
+                "occurredAt": _iso(row["occurred_at"]),
+                "eventType": row["event_type"],
+                "actorEmail": row["actor_email"],
+                "ipAddress": row["ip_address"],
+            }
+            for row in rows
+        ]
+        page: dict[str, Any] = {"items": items}
+        if next_cursor is not None:
+            page["nextCursor"] = next_cursor
+        return page
