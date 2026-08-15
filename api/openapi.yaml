@@ -1,0 +1,860 @@
+openapi: 3.1.0
+info:
+  title: NEXUS CRM Foundation API
+  version: 1.0.0
+  description: Slice A only. Cookie session + public ops. RFC 9457 errors. JSON camelCase.
+servers:
+  - url: /api/v1
+tags:
+  - name: public
+  - name: session
+  - name: me
+  - name: tenant
+  - name: users
+  - name: arco
+  - name: audit
+security:
+  - cookieAuth: []
+paths:
+  /healthz:
+    get:
+      tags: [public]
+      security: []
+      operationId: healthz
+      responses:
+        "200":
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+  /public/signups:
+    post:
+      tags: [public]
+      security: []
+      operationId: createSignup
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "202":
+          description: Accepted. Always this status whether or not the email was new (no enumeration). Empty body.
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /public/email-verifications:
+    post:
+      tags: [public]
+      security: []
+      operationId: verifyEmail
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+      responses:
+        "204":
+          description: Tenant now provisioning or active
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /public/email-verifications/resend:
+    post:
+      tags: [public]
+      security: []
+      operationId: resendVerification
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendVerificationRequest"
+      responses:
+        "202":
+          description: Generic accepted. Empty body. Mail queued only if tenant is pending_verification.
+        "403":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /public/sessions:
+    post:
+      tags: [public]
+      security: []
+      operationId: createSession
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: authenticated | mfa_required | mfa_enrollment_required
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: nexus_session (authenticated or mfa_enrollment_required) or none (mfa_required)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /public/sessions/mfa:
+    post:
+      tags: [public]
+      security: []
+      operationId: completeMfa
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteMfaRequest"
+      responses:
+        "200":
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionPrincipal"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /sessions/current:
+    delete:
+      tags: [session]
+      operationId: logout
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "204":
+          description: Logged out
+        "403":
+          $ref: "#/components/responses/Problem"
+  /public/password-resets:
+    post:
+      tags: [public]
+      security: []
+      operationId: requestPasswordReset
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "202":
+          description: Generic accepted. Empty body.
+        "403":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /public/password-resets/confirm:
+    post:
+      tags: [public]
+      security: []
+      operationId: confirmPasswordReset
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+      responses:
+        "204":
+          description: Password updated
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /public/invites/accept:
+    post:
+      tags: [public]
+      security: []
+      operationId: acceptInvite
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInviteRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionPrincipal"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /me:
+    get:
+      tags: [me]
+      operationId: getMe
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionPrincipal"
+    patch:
+      tags: [me]
+      operationId: patchMe
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchMeRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionPrincipal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /me/mfa/totp:
+    post:
+      tags: [me]
+      operationId: startTotpEnroll
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpauthUrl]
+                properties:
+                  otpauthUrl: { type: string }
+        "403":
+          $ref: "#/components/responses/Problem"
+  /me/mfa/totp/confirm:
+    post:
+      tags: [me]
+      operationId: confirmTotpEnroll
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmTotpRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [backupCodes]
+                properties:
+                  backupCodes:
+                    type: array
+                    minItems: 10
+                    maxItems: 10
+                    items:
+                      type: string
+                      pattern: "^[A-Z0-9]{8}$"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /me/arco-requests:
+    post:
+      tags: [arco]
+      operationId: submitSelfArco
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelfArcoRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcoRequest"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /tenant:
+    get:
+      tags: [tenant]
+      operationId: getTenant
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "403":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [tenant]
+      operationId: patchTenant
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchTenantRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /users:
+    get:
+      tags: [users]
+      operationId: listUsers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /invites:
+    post:
+      tags: [users]
+      operationId: createInvite
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteRequest"
+      responses:
+        "201":
+          description: Invite created
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /users/{id}/deactivation:
+    post:
+      tags: [users]
+      operationId: deactivateUser
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /users/{id}/role:
+    patch:
+      tags: [users]
+      operationId: changeUserRole
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeRoleRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /public/tenants/{slug}/arco-requests:
+    post:
+      tags: [public, arco]
+      security: []
+      operationId: submitPublicArco
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicArcoRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcoRequest"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /arco-requests:
+    get:
+      tags: [arco]
+      operationId: listArco
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArcoRequest"
+        "403":
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [arco]
+      operationId: intakeManualArco
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualArcoRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcoRequest"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /arco-requests/{id}/response:
+    post:
+      tags: [arco]
+      operationId: respondArco
+      parameters:
+        - $ref: "#/components/parameters/ArcoId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcoResponseRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcoRequest"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /arco-requests/{id}/closure:
+    post:
+      tags: [arco]
+      operationId: closeArco
+      parameters:
+        - $ref: "#/components/parameters/ArcoId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcoCloseRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcoRequest"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /audit-events:
+    get:
+      tags: [audit]
+      operationId: listAudit
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "403":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: nexus_session
+      description: Opaque httpOnly SameSite=Lax Path=/ session cookie. Absolute TTL 12h; idle TTL 30m in Redis. Companion cookie nexus_preauth (10 minutes) is used for MFA enroll.
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ArcoId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CsrfClient:
+      name: X-Nexus-Client
+      in: header
+      required: true
+      description: Required on every mutating HTTP method (POST, PATCH, PUT, DELETE), public and cookie routes. Missing or not equal to web yields 403 code csrf_rejected.
+      schema:
+        type: string
+        enum: [web]
+  responses:
+    Problem:
+      description: RFC 9457 application/problem+json
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          enum:
+            - invalid_credentials
+            - email_not_verified
+            - tenant_not_ready
+            - email_taken
+            - slug_taken
+            - seat_cap_exceeded
+            - last_admin
+            - not_found
+            - policy_version_stale
+            - csrf_rejected
+            - rate_limited
+            - validation_error
+            - invalid_token
+            - mfa_invalid
+            - redis_unavailable
+    Role:
+      type: string
+      enum: [administrador, gerente, vendedor]
+    SignupRequest:
+      type: object
+      required:
+        [companyName, slug, adminFullName, email, password, acceptPrivacyPolicy, acceptHabeasData, policyVersion]
+      properties:
+        companyName: { type: string }
+        slug: { type: string, pattern: "^[a-z0-9-]{3,63}$" }
+        adminFullName: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10 }
+        acceptPrivacyPolicy: { type: boolean, enum: [true] }
+        acceptHabeasData: { type: boolean, enum: [true] }
+        policyVersion: { type: string }
+    VerifyEmailRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    ResendVerificationRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    CompleteMfaRequest:
+      type: object
+      required: [challengeId, code]
+      properties:
+        challengeId: { type: string }
+        code: { type: string }
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+    PasswordResetConfirmRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string }
+        password: { type: string, minLength: 10 }
+    InviteRequest:
+      type: object
+      required: [email, role, fullName]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+        fullName: { type: string }
+    AcceptInviteRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string }
+        password: { type: string, minLength: 10 }
+    SelfArcoRequest:
+      type: object
+      required: [requestType, details]
+      properties:
+        requestType: { $ref: "#/components/schemas/ArcoRequestType" }
+        details: { type: string }
+    ManualArcoRequest:
+      type: object
+      required: [requestType, requesterName, requesterEmail, details]
+      properties:
+        requestType: { $ref: "#/components/schemas/ArcoRequestType" }
+        requesterName: { type: string }
+        requesterEmail: { type: string, format: email }
+        details: { type: string }
+    PublicArcoRequest:
+      type: object
+      required: [requesterName, requesterEmail, requestType, details]
+      properties:
+        requesterName: { type: string }
+        requesterEmail: { type: string, format: email }
+        requestType: { $ref: "#/components/schemas/ArcoRequestType" }
+        details: { type: string }
+    ArcoResponseRequest:
+      type: object
+      required: [responseText]
+      properties:
+        responseText: { type: string }
+    ArcoCloseRequest:
+      type: object
+      additionalProperties: false
+      properties: {}
+    ConfirmTotpRequest:
+      type: object
+      required: [code, backupCodesSaved]
+      properties:
+        code: { type: string }
+        backupCodesSaved: { type: boolean, enum: [true] }
+    PatchMeRequest:
+      type: object
+      properties:
+        fullName: { type: string }
+    PatchTenantRequest:
+      type: object
+      properties:
+        companyName: { type: string }
+        slug: { type: string, pattern: "^[a-z0-9-]{3,63}$" }
+        policyVersion: { type: string }
+    ChangeRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+    LoginResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [authenticated, mfa_required, mfa_enrollment_required]
+        mfaChallengeId: { type: string }
+        principal:
+          $ref: "#/components/schemas/SessionPrincipal"
+    SessionPrincipal:
+      type: object
+      required: [userId, tenantId, role, mfaStatus, scope, email, fullName, tenantSlug]
+      properties:
+        userId: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/Role" }
+        mfaStatus:
+          type: string
+          enum: [not_required, pending, enrolled]
+        scope:
+          type: string
+          enum: [full, mfa_enroll_only]
+        email: { type: string, format: email }
+        fullName: { type: string }
+        tenantSlug: { type: string }
+    Tenant:
+      type: object
+      required: [id, slug, companyName, plan, seatCap, status]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        companyName: { type: string }
+        plan: { type: string, enum: [starter] }
+        seatCap: { type: integer }
+        status:
+          type: string
+          enum: [pending_verification, provisioning, active, suspended]
+    User:
+      type: object
+      required: [id, email, fullName, role, status, mfaStatus]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        status:
+          type: string
+          enum: [active, deactivated, pending_invite]
+        mfaStatus:
+          type: string
+          enum: [not_required, pending, enrolled]
+    ArcoRequestType:
+      type: string
+      enum: [acceso, rectificacion, cancelacion, oposicion]
+    ArcoRequest:
+      type: object
+      required: [id, requestType, source, status, requesterName, requesterEmail]
+      properties:
+        id: { type: string, format: uuid }
+        requestType: { $ref: "#/components/schemas/ArcoRequestType" }
+        source:
+          type: string
+          enum: [public_form, logged_in_self, manual_mail]
+        status:
+          type: string
+          enum: [open, responded, closed]
+        requesterName: { type: string }
+        requesterEmail: { type: string, format: email }
+        details: { type: string }
+        responseText: { type: string }
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        nextCursor: { type: string }
+    AuditEvent:
+      type: object
+      required: [id, occurredAt, eventType]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actorEmail: { type: string }
+        eventType:
+          type: string
+          enum:
+            - tenant.signup
+            - auth.login.success
+            - auth.login.failure
+            - users.invite.created
+            - users.invite.accepted
+            - users.role.changed
+            - users.deactivated
+            - consent.recorded
+            - arco.created
+            - arco.responded
+            - arco.closed
+            - auth.mfa.enrolled
+            - auth.email.verified
+            - auth.password.reset
+        ipAddress: { type: string }
