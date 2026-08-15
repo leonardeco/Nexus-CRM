@@ -1,3 +1,10 @@
+import { AppRouter } from "./router";
+import { Providers } from "./providers";
+
 export function App() {
-  return <p>NEXUS CRM</p>;
+  return (
+    <Providers>
+      <AppRouter />
+    </Providers>
+  );
 }
