@@ -1,3 +1,5 @@
+import json
+
 from httpx import AsyncClient
 from sqlalchemy import text
 
@@ -315,3 +317,76 @@ async def test_tc_2_2_stored_policy_version_matches_submitted(
         )
     assert version == payload["policyVersion"]
     assert version != ""
+
+
+async def test_smtp_failure_keeps_outbox_unsent_for_worker_retry(
+    client: AsyncClient, monkeypatch
+) -> None:
+    def _boom(*_args, **_kwargs) -> None:
+        raise OSError("smtp down")
+
+    monkeypatch.setattr("app.modules.emailing.outbox.send_email", _boom)
+    payload = signup_payload()
+    response = await client.post(
+        "/api/v1/public/signups", headers=CSRF_HEADERS, json=payload
+    )
+    assert response.status_code == 202
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    SELECT sent_at, last_error, payload
+                    FROM catalog.email_outbox
+                    WHERE lower(to_email) = lower(:email)
+                      AND template = 'verify_email'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"email": payload["email"]},
+            )
+        ).mappings().first()
+    assert row is not None
+    assert row["sent_at"] is None
+    assert row["last_error"] == "smtp_failed"
+    stored = row["payload"]
+    if isinstance(stored, str):
+        stored = json.loads(stored)
+    assert "token" not in stored
+    assert "token_encrypted" in stored
+
+    captured: list[str] = []
+
+    def _deliver(to_email: str, subject: str, body: str, template: str = "") -> None:
+        captured.append(body)
+
+    monkeypatch.setattr("app.worker.send_email", _deliver)
+    from app.worker import send_due_mail
+
+    await send_due_mail()
+    assert captured
+    assert "Token:" in captured[-1]
+    async with engine.connect() as conn:
+        sent = (
+            await conn.execute(
+                text(
+                    """
+                    SELECT sent_at, payload
+                    FROM catalog.email_outbox
+                    WHERE lower(to_email) = lower(:email)
+                      AND template = 'verify_email'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {"email": payload["email"]},
+            )
+        ).mappings().first()
+    assert sent is not None
+    assert sent["sent_at"] is not None
+    final_payload = sent["payload"]
+    if isinstance(final_payload, str):
+        final_payload = json.loads(final_payload)
+    assert "token_encrypted" not in final_payload
+    assert "token" not in final_payload

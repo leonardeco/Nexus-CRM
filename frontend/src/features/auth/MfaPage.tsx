@@ -24,6 +24,7 @@ export function MfaPage() {
       }),
     onSuccess: (principal) => {
       const updated = { ...principal, scope: "full" as const };
+      queryClient.clear();
       queryClient.setQueryData(["me"], updated);
       setPrincipal(updated);
       setMfaChallengeId(null);

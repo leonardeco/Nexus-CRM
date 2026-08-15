@@ -25,6 +25,7 @@ const ADMIN_LINKS = [
 export function AppShell() {
   const principal = useAuthStore((state) => state.principal);
   const setPrincipal = useAuthStore((state) => state.setPrincipal);
+  const setMfaChallengeId = useAuthStore((state) => state.setMfaChallengeId);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -34,6 +35,7 @@ export function AppShell() {
     mutationFn: () => api<void>("/sessions/current", { method: "DELETE" }),
     onSettled: () => {
       setPrincipal(null);
+      setMfaChallengeId(null);
       queryClient.clear();
       navigate("/ingresar", { replace: true });
     },

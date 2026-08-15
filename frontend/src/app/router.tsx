@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { api, ApiError } from "../api/client";
@@ -20,7 +20,9 @@ import { useAuthStore } from "../stores/auth-store";
 import { AppShell } from "./AppShell";
 
 function SessionGate({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const setPrincipal = useAuthStore((state) => state.setPrincipal);
+  const setMfaChallengeId = useAuthStore((state) => state.setMfaChallengeId);
   const sessionQuery = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
@@ -30,7 +32,9 @@ function SessionGate({ children }: { children: ReactNode }) {
         return principal;
       } catch (error) {
         if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          queryClient.clear();
           setPrincipal(null);
+          setMfaChallengeId(null);
           return null;
         }
         throw error;

@@ -28,6 +28,10 @@ def mfa_rate_key(challenge_id: str, user_id: str) -> str:
     return f"rl:mfa:{challenge_id}:{user_id}"
 
 
+def mfa_account_rate_key(user_id: str) -> str:
+    return f"rl:mfa-account:{user_id}"
+
+
 def redis_unavailable_error() -> AppError:
     return AppError(
         503,

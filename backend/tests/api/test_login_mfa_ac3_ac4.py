@@ -579,6 +579,33 @@ async def test_tc_4_9_mfa_failures_are_rate_limited_and_invalidate_challenge(
     _no_session_cookie(recovered)
 
 
+async def test_mfa_failure_budget_is_per_account_across_challenges(
+    client: AsyncClient,
+) -> None:
+    admin = await enroll_admin(client)
+    await client.request("DELETE", "/api/v1/sessions/current", headers=CSRF_HEADERS)
+    login = await client.post(
+        "/api/v1/public/sessions",
+        headers=CSRF_HEADERS,
+        json={"email": admin["signup"]["email"], "password": VALID_PASSWORD},
+    )
+    challenge_id = login.json()["mfaChallengeId"]
+    for attempt in range(5):
+        wrong = await client.post(
+            "/api/v1/public/sessions/mfa",
+            headers=CSRF_HEADERS,
+            json={"challengeId": challenge_id, "code": "000000"},
+        )
+        assert wrong.status_code == 401, attempt
+    relogin = await client.post(
+        "/api/v1/public/sessions",
+        headers=CSRF_HEADERS,
+        json={"email": admin["signup"]["email"], "password": VALID_PASSWORD},
+    )
+    assert relogin.status_code == 429
+    assert relogin.json()["code"] == "rate_limited"
+
+
 async def _set_seat_cap(tenant_id: str, seat_cap: int) -> None:
     async with engine.begin() as conn:
         await conn.execute(

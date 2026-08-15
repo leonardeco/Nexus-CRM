@@ -22,6 +22,7 @@ export function LoginPage() {
         body: JSON.stringify(body),
       }),
     onSuccess: (result) => {
+      queryClient.clear();
       if (result.status === "authenticated" && result.principal) {
         queryClient.setQueryData(["me"], result.principal);
         setPrincipal(result.principal);

@@ -166,6 +166,7 @@ async def outbox_token(email: str, template: str) -> str:
         payload = json.loads(payload)
     assert isinstance(payload, dict)
     assert "token" not in payload
+    assert "token_encrypted" not in payload
     assert token not in json.dumps(payload)
     return token
 

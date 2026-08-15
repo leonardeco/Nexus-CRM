@@ -24,11 +24,16 @@ async def send_due_mail() -> None:
     async with SessionLocal() as session:
         due = await outbox.fetch_due(session)
         for message in due:
-            if message.payload.get("token_hash") and "token" not in message.payload:
-                await outbox.mark_sent(session, message.id)
+            raw_token = outbox.raw_token_from_payload(message.payload)
+            if message.payload.get("token_hash") and raw_token is None:
+                await outbox.mark_failed(session, message.id, "token_unavailable")
                 continue
             subject = str(message.payload.get("subject") or message.template)
-            body = str(message.payload.get("body") or "")
+            body = (
+                f"Token: {raw_token}"
+                if raw_token is not None
+                else str(message.payload.get("body") or "")
+            )
             try:
                 await asyncio.to_thread(
                     send_email,

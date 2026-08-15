@@ -13,6 +13,7 @@ from app.core.errors import AppError
 from app.core.rate_limit import (
     enforce_rate_limit,
     login_rate_key,
+    mfa_account_rate_key,
     mfa_rate_key,
     password_reset_rate_key,
     redis_unavailable_error,
@@ -321,6 +322,7 @@ class AuthService:
                 session_id=session_id,
             )
         if user.role in _MFA_ROLES and user.mfa_status == "enrolled":
+            await self._reject_if_mfa_locked(user.id)
             challenge_id = await self._sessions.create_mfa_challenge(user.id)
             return LoginResult(status="mfa_required", mfa_challenge_id=challenge_id)
         principal = build_principal(user, tenant, identity.email, scope="full")
@@ -363,6 +365,12 @@ class AuthService:
             )
             await self._session.commit()
             try:
+                await enforce_rate_limit(
+                    self._redis,
+                    key=mfa_account_rate_key(str(user_id)),
+                    limit=_MFA_FAILURE_LIMIT,
+                    window_seconds=_MFA_FAILURE_WINDOW,
+                )
                 failures = await enforce_rate_limit(
                     self._redis,
                     key=mfa_rate_key(challenge_id, str(user_id)),
@@ -428,6 +436,8 @@ class AuthService:
             tenant_id=tenant.id,
             schema_name=tenant.schema_name,
         )
+        principal = build_principal(user, tenant, identity.email, scope="full")
+        session_id = await self._sessions.create(principal, scope="full")
         await self._audit.append(
             self._session,
             event_type="auth.login.success",
@@ -437,8 +447,6 @@ class AuthService:
             schema_name=tenant.schema_name,
         )
         await self._session.commit()
-        principal = build_principal(user, tenant, identity.email, scope="full")
-        session_id = await self._sessions.create(principal, scope="full")
         return codes, session_id, principal
 
     async def request_password_reset(self, email: str, *, ip: str) -> None:
@@ -517,6 +525,19 @@ class AuthService:
 
     async def load_session(self, session_id: str) -> dict[str, Any] | None:
         return await self._sessions.get(session_id)
+
+    async def _reject_if_mfa_locked(self, user_id: UUID) -> None:
+        try:
+            raw_count = await self._redis.get(mfa_account_rate_key(str(user_id)))
+        except Exception as exc:
+            raise redis_unavailable_error() from exc
+        if raw_count is not None and int(raw_count) >= _MFA_FAILURE_LIMIT:
+            raise AppError(
+                429,
+                "rate_limited",
+                "Demasiados intentos",
+                "Intenta de nuevo más tarde.",
+            )
 
     async def _fail_login(self, email: str, ip: str, key: str) -> None:
         await self._audit.append(
