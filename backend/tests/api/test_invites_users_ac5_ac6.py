@@ -384,6 +384,13 @@ async def test_tc_6_1_admin_lists_users_and_reads_tenant(
     body = tenant.json()
     assert body["seatCap"] == 2
     assert body["id"] == admin["me"]["tenantId"]
+    patched = await client.patch(
+        "/api/v1/tenant",
+        headers=CSRF_HEADERS,
+        json={"companyName": "Acme Actualizada"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["companyName"] == "Acme Actualizada"
 
 
 async def test_invite_without_csrf_is_rejected(client: AsyncClient) -> None:
@@ -408,3 +415,309 @@ async def test_unknown_user_deactivation_is_not_found(client: AsyncClient) -> No
     )
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+async def test_tc_5_2_second_seat_fills_starter_cap(client: AsyncClient) -> None:
+    admin = await _enroll_admin(client)
+    created = await client.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={
+            "email": unique_email(),
+            "role": "vendedor",
+            "fullName": "Segundo Asiento",
+        },
+    )
+    assert created.status_code == 201
+    tenant_id = str(admin["me"]["tenantId"])
+    async with engine.connect() as conn:
+        active = await conn.scalar(
+            text(
+                """
+                SELECT count(*) FROM catalog.users
+                WHERE tenant_id = :tenant_id AND status = 'active'
+                """
+            ),
+            {"tenant_id": tenant_id},
+        )
+        pending = await conn.scalar(
+            text(
+                """
+                SELECT count(*) FROM catalog.invites
+                WHERE tenant_id = :tenant_id
+                  AND accepted_at IS NULL
+                  AND expires_at > now()
+                """
+            ),
+            {"tenant_id": tenant_id},
+        )
+    assert int(active or 0) + int(pending or 0) == 2
+
+
+async def test_tc_5_5_vendedor_cannot_invite(client: AsyncClient) -> None:
+    admin = await _enroll_admin(client)
+    await _set_seat_cap(str(admin["me"]["tenantId"]), 3)
+    vendedor_email = unique_email()
+    created = await client.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={
+            "email": vendedor_email,
+            "role": "vendedor",
+            "fullName": "Vendedor Invite",
+        },
+    )
+    assert created.status_code == 201
+    token = await _outbox_token(vendedor_email, "invite")
+    async with await _new_client() as vendedor:
+        accepted = await vendedor.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": token, "password": _INVITE_PASSWORD},
+        )
+        assert accepted.status_code == 200
+        before = await _invite_count(str(admin["me"]["tenantId"]))
+        forbidden = await vendedor.post(
+            "/api/v1/invites",
+            headers=CSRF_HEADERS,
+            json={
+                "email": unique_email(),
+                "role": "vendedor",
+                "fullName": "No Debe Entrar",
+            },
+        )
+        assert forbidden.status_code == 403
+        assert forbidden.headers["content-type"].startswith("application/problem+json")
+        assert await _invite_count(str(admin["me"]["tenantId"])) == before
+
+
+async def test_tc_5_7_invite_token_is_single_use_and_expires(
+    client: AsyncClient,
+) -> None:
+    admin = await _enroll_admin(client)
+    await _set_seat_cap(str(admin["me"]["tenantId"]), 4)
+    email = unique_email()
+    created = await client.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={"email": email, "role": "vendedor", "fullName": "Un Solo Uso"},
+    )
+    assert created.status_code == 201
+    token = await _outbox_token(email, "invite")
+    async with await _new_client() as invitee:
+        first = await invitee.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": token, "password": _INVITE_PASSWORD},
+        )
+        assert first.status_code == 200
+        assert first.json().get("userId")
+        reused = await invitee.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": token, "password": _INVITE_PASSWORD},
+        )
+        assert reused.status_code == 400
+        assert reused.json()["code"] == "invalid_token"
+
+    expired_email = unique_email()
+    pending = await client.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={
+            "email": expired_email,
+            "role": "vendedor",
+            "fullName": "Expirada",
+        },
+    )
+    assert pending.status_code == 201
+    expired_token = await _outbox_token(expired_email, "invite")
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                """
+                UPDATE catalog.invites
+                SET expires_at = now() - interval '1 hour'
+                WHERE lower(email) = lower(:email)
+                """
+            ),
+            {"email": expired_email},
+        )
+    expired = await client.post(
+        "/api/v1/public/invites/accept",
+        headers=CSRF_HEADERS,
+        json={"token": expired_token, "password": _INVITE_PASSWORD},
+    )
+    assert expired.status_code == 400
+    assert expired.json()["code"] == "invalid_token"
+
+
+async def test_tc_5_8_concurrent_invites_cannot_oversell_last_seat(
+    client: AsyncClient,
+) -> None:
+    import asyncio
+
+    admin = await _enroll_admin(client)
+    tenant_id = str(admin["me"]["tenantId"])
+    cookies = dict(client.cookies)
+
+    async def _invite(email: str):
+        async with await _new_client() as other:
+            for key, value in cookies.items():
+                other.cookies.set(key, value)
+            return await other.post(
+                "/api/v1/invites",
+                headers=CSRF_HEADERS,
+                json={
+                    "email": email,
+                    "role": "vendedor",
+                    "fullName": "Carrera De Cupo",
+                },
+            )
+
+    first, second = await asyncio.gather(
+        _invite(unique_email()), _invite(unique_email())
+    )
+    statuses = sorted([first.status_code, second.status_code])
+    assert statuses == [201, 409]
+    loser = first if first.status_code == 409 else second
+    assert loser.json()["code"] == "seat_cap_exceeded"
+    assert await _invite_count(tenant_id) == 1
+
+
+async def test_tc_6_6_gerente_and_vendedor_cannot_use_admin_surfaces(
+    client: AsyncClient,
+) -> None:
+    admin = await _enroll_admin(client)
+    await _set_seat_cap(str(admin["me"]["tenantId"]), 4)
+    gerente_email = unique_email()
+    vendedor_email = unique_email()
+    for email, role, name in (
+        (gerente_email, "gerente", "Gabriela"),
+        (vendedor_email, "vendedor", "Victor"),
+    ):
+        created = await client.post(
+            "/api/v1/invites",
+            headers=CSRF_HEADERS,
+            json={"email": email, "role": role, "fullName": name},
+        )
+        assert created.status_code == 201
+
+    gerente_token = await _outbox_token(gerente_email, "invite")
+    vendedor_token = await _outbox_token(vendedor_email, "invite")
+
+    async with await _new_client() as gerente:
+        accepted = await gerente.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": gerente_token, "password": _INVITE_PASSWORD},
+        )
+        assert accepted.status_code == 200
+        start = await gerente.post("/api/v1/me/mfa/totp", headers=CSRF_HEADERS)
+        secret = parse_qs(urlparse(start.json()["otpauthUrl"]).query)["secret"][0]
+        confirm = await gerente.post(
+            "/api/v1/me/mfa/totp/confirm",
+            headers=CSRF_HEADERS,
+            json={"code": pyotp.TOTP(secret).now(), "backupCodesSaved": True},
+        )
+        assert confirm.status_code == 200
+        me = await gerente.get("/api/v1/me")
+        assert me.status_code == 200
+        assert me.json()["scope"] == "full"
+        await _assert_admin_forbidden(gerente)
+
+    async with await _new_client() as vendedor:
+        accepted = await vendedor.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": vendedor_token, "password": _INVITE_PASSWORD},
+        )
+        assert accepted.status_code == 200
+        me = await vendedor.get("/api/v1/me")
+        assert me.status_code == 200
+        await _assert_admin_forbidden(vendedor)
+
+
+async def test_tc_6_7_users_are_deactivated_not_deleted(client: AsyncClient) -> None:
+    await _enroll_admin(client)
+    email = unique_email()
+    invited = await client.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={"email": email, "role": "vendedor", "fullName": "Para Desactivar"},
+    )
+    assert invited.status_code == 201
+    token = await _outbox_token(email, "invite")
+    async with await _new_client() as teammate:
+        accepted = await teammate.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": token, "password": _INVITE_PASSWORD},
+        )
+        user_id = accepted.json()["userId"]
+    deleted = await client.delete(f"/api/v1/users/{user_id}", headers=CSRF_HEADERS)
+    assert deleted.status_code in {404, 405}
+    deactivated = await client.post(
+        f"/api/v1/users/{user_id}/deactivation",
+        headers=CSRF_HEADERS,
+    )
+    assert deactivated.status_code == 200
+    row = await _user_row(user_id)
+    assert row["status"] == "deactivated"
+    assert row["id"]
+
+
+async def test_tc_6_8_role_or_deactivation_is_reread_every_request(
+    client: AsyncClient,
+) -> None:
+    await _enroll_admin(client)
+    email = unique_email()
+    invited = await client.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={"email": email, "role": "vendedor", "fullName": "Sesion Abierta"},
+    )
+    assert invited.status_code == 201
+    token = await _outbox_token(email, "invite")
+    async with await _new_client() as teammate:
+        accepted = await teammate.post(
+            "/api/v1/public/invites/accept",
+            headers=CSRF_HEADERS,
+            json={"token": token, "password": _INVITE_PASSWORD},
+        )
+        assert accepted.status_code == 200
+        user_id = accepted.json()["userId"]
+        me_before = await teammate.get("/api/v1/me")
+        assert me_before.status_code == 200
+        deactivated = await client.post(
+            f"/api/v1/users/{user_id}/deactivation",
+            headers=CSRF_HEADERS,
+        )
+        assert deactivated.status_code == 200
+        me_after = await teammate.get("/api/v1/me")
+        assert me_after.status_code == 401
+
+
+async def _assert_admin_forbidden(actor: AsyncClient) -> None:
+    listed = await actor.get("/api/v1/users")
+    assert listed.status_code == 403
+    patched = await actor.patch(
+        "/api/v1/tenant",
+        headers=CSRF_HEADERS,
+        json={"companyName": "Hack"},
+    )
+    assert patched.status_code == 403
+    invited = await actor.post(
+        "/api/v1/invites",
+        headers=CSRF_HEADERS,
+        json={
+            "email": unique_email(),
+            "role": "vendedor",
+            "fullName": "No",
+        },
+    )
+    assert invited.status_code == 403
+    inbox = await actor.get("/api/v1/arco-requests")
+    assert inbox.status_code == 403
+    audit = await actor.get("/api/v1/audit-events")
+    assert audit.status_code == 403

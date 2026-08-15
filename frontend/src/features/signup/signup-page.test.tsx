@@ -22,7 +22,7 @@ beforeEach(() => {
   useAuthStore.setState({ principal: null });
 });
 
-test("renders two required consent checkboxes with policy links", () => {
+test("TC-2.4 consent checkboxes are explicit with policy links", () => {
   renderSignup();
 
   const privacy = screen.getByRole("checkbox", {
