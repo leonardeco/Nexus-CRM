@@ -28,9 +28,9 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def _aes_key() -> bytes:
     key = settings.nexus_data_key.encode("utf-8")
-    if len(key) == 32:
-        return key
-    return hashlib.sha256(key).digest()
+    if len(key) != 32:
+        raise RuntimeError("NEXUS_DATA_KEY must be exactly 32 bytes")
+    return key
 
 
 def encrypt_bytes(plaintext: bytes) -> bytes:

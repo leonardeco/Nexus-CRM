@@ -55,6 +55,10 @@ export function TextField({
 }: TextFieldProps) {
   const id = useId();
   const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = [hint ? hintId : undefined, error ? errorId : undefined]
+    .filter(Boolean)
+    .join(" ") || undefined;
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>
@@ -72,10 +76,14 @@ export function TextField({
         type={type}
         required={required}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         {...props}
       />
-      {hint ? <span className="muted">{hint}</span> : null}
+      {hint ? (
+        <span id={hintId} className="muted">
+          {hint}
+        </span>
+      ) : null}
       {error ? (
         <span id={errorId} className="field-error" role="alert">
           {error}
@@ -96,6 +104,10 @@ export function PasswordField({
 }: PasswordFieldProps) {
   const id = useId();
   const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy = [hint ? hintId : undefined, error ? errorId : undefined]
+    .filter(Boolean)
+    .join(" ") || undefined;
   const [visible, setVisible] = useState(false);
   return (
     <div className="field">
@@ -115,7 +127,7 @@ export function PasswordField({
           type={visible ? "text" : "password"}
           required={required}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={describedBy}
           {...props}
         />
         <button
@@ -127,7 +139,11 @@ export function PasswordField({
           {visible ? <EyeOff size={24} aria-hidden="true" /> : <Eye size={24} aria-hidden="true" />}
         </button>
       </div>
-      {hint ? <span className="muted">{hint}</span> : null}
+      {hint ? (
+        <span id={hintId} className="muted">
+          {hint}
+        </span>
+      ) : null}
       {error ? (
         <span id={errorId} className="field-error" role="alert">
           {error}

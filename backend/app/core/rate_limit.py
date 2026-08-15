@@ -24,6 +24,10 @@ def arco_rate_key(slug: str, ip: str) -> str:
     return f"rl:arco:{slug}:{ip}"
 
 
+def mfa_rate_key(challenge_id: str, user_id: str) -> str:
+    return f"rl:mfa:{challenge_id}:{user_id}"
+
+
 def redis_unavailable_error() -> AppError:
     return AppError(
         503,
@@ -39,11 +43,13 @@ async def enforce_rate_limit(
     key: str,
     limit: int,
     window_seconds: int,
-) -> None:
+) -> int:
     try:
-        current = int(await redis.incr(key))
-        if current == 1:
-            await redis.expire(key, window_seconds)
+        pipe = redis.pipeline(transaction=True)
+        pipe.incr(key)
+        pipe.expire(key, window_seconds)
+        results = await pipe.execute()
+        current = int(results[0])
     except AppError:
         raise
     except Exception as exc:
@@ -55,3 +61,4 @@ async def enforce_rate_limit(
             "Demasiados intentos",
             "Intenta de nuevo más tarde.",
         )
+    return current

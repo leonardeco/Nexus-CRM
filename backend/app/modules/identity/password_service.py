@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from app.core.errors import AppError
@@ -9,11 +10,11 @@ _DIGIT = re.compile(r"[0-9]")
 
 
 class PasswordService:
-    def hash(self, password: str) -> str:
-        return hash_password(password)
+    async def hash(self, password: str) -> str:
+        return await asyncio.to_thread(hash_password, password)
 
-    def verify(self, password: str, password_hash: str) -> bool:
-        return verify_password(password, password_hash)
+    async def verify(self, password: str, password_hash: str) -> bool:
+        return await asyncio.to_thread(verify_password, password, password_hash)
 
     def validate_policy(self, password: str) -> None:
         if (

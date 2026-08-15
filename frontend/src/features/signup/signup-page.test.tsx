@@ -19,7 +19,7 @@ function renderSignup() {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({ principal: null });
+  useAuthStore.setState({ principal: null, mfaChallengeId: null });
 });
 
 test("TC-2.4 consent checkboxes are explicit with policy links", () => {
@@ -37,6 +37,8 @@ test("TC-2.4 consent checkboxes are explicit with policy links", () => {
 
   const privacyLabel = privacy.closest("label");
   const habeasLabel = habeas.closest("label");
-  expect(privacyLabel?.querySelector("a")).not.toBeNull();
-  expect(habeasLabel?.querySelector("a")).not.toBeNull();
+  expect(privacyLabel?.querySelector("a")).toBeNull();
+  expect(habeasLabel?.querySelector("a")).toBeNull();
+  expect(screen.getByRole("link", { name: "política de privacidad" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "habeas data" })).toBeTruthy();
 });

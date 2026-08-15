@@ -90,4 +90,5 @@ def ensure_local_services() -> None:
     os.environ.setdefault(
         "NEXUS_DATA_KEY", "0123456789abcdef0123456789abcdef"
     )
+    os.environ.setdefault("SESSION_COOKIE_SECURE", "false")
     os.environ.setdefault("CURRENT_POLICY_VERSION", "privacy-2026-08-01")

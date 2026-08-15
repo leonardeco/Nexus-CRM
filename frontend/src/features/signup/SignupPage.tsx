@@ -91,26 +91,32 @@ export function SignupPage() {
             hint="Mínimo 10 caracteres, con mayúscula, minúscula y dígito."
             onBlur={(event) => setPasswordError(passwordPolicyError(event.currentTarget.value))}
           />
-          <label className="consent-label">
-            <input type="checkbox" name="acceptPrivacyPolicy" required />
-            <span>
-              <a href="/politica-privacidad">Acepto la política de privacidad</a>
-              <span className="req" aria-hidden="true">
-                {" "}
-                *
+          <div className="consent-row">
+            <label className="consent-label">
+              <input type="checkbox" name="acceptPrivacyPolicy" required />
+              <span>
+                Acepto la política de privacidad
+                <span className="req" aria-hidden="true">
+                  {" "}
+                  *
+                </span>
               </span>
-            </span>
-          </label>
-          <label className="consent-label">
-            <input type="checkbox" name="acceptHabeasData" required />
-            <span>
-              <a href="/habeas-data">Acepto el tratamiento de datos personales (habeas data)</a>
-              <span className="req" aria-hidden="true">
-                {" "}
-                *
+            </label>
+            <a href="/politica-privacidad">política de privacidad</a>
+          </div>
+          <div className="consent-row">
+            <label className="consent-label">
+              <input type="checkbox" name="acceptHabeasData" required />
+              <span>
+                Acepto el tratamiento de datos personales (habeas data)
+                <span className="req" aria-hidden="true">
+                  {" "}
+                  *
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+            <a href="/habeas-data">habeas data</a>
+          </div>
           <Button type="submit" loading={mutation.isPending}>
             Crear empresa
           </Button>

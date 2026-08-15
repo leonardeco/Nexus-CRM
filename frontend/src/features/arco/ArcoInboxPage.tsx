@@ -77,6 +77,17 @@ export function ArcoInboxPage() {
 
   const items = inboxQuery.data ?? [];
 
+  if (inboxQuery.isError) {
+    return (
+      <div className="stack-lg">
+        <h1>Bandeja ARCO</h1>
+        <p className="alert alert-error" role="alert">
+          {problemMessage(inboxQuery.error)}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="stack-lg">
       <h1>Bandeja ARCO</h1>

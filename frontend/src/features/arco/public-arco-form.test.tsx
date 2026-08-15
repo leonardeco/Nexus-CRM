@@ -21,7 +21,7 @@ function renderPublicArco() {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({ principal: null });
+  useAuthStore.setState({ principal: null, mfaChallengeId: null });
 });
 
 test("public ARCO select lists acceso, rectificación, cancelación and oposición", () => {

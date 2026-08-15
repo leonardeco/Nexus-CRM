@@ -7,6 +7,7 @@ from pydantic.alias_generators import to_camel
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.http import client_ip
 from app.db.engine import get_session
 from app.modules.arco.service import ArcoService
 from app.modules.rbac.deps import get_redis, require_permission, require_principal
@@ -52,15 +53,6 @@ class ArcoCloseRequest(ApiModel):
     )
 
 
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
-    if request.client is not None:
-        return request.client.host
-    return "0.0.0.0"
-
-
 def _arco(session: AsyncSession, redis: Redis | None = None) -> ArcoService:
     return ArcoService(session, redis)
 
@@ -79,7 +71,7 @@ async def submit_public_arco(
         requester_email=str(payload.requester_email),
         request_type=payload.request_type,
         details=payload.details,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )
 
 
@@ -95,7 +87,7 @@ async def submit_self_arco(
         principal,
         request_type=payload.request_type,
         details=payload.details,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )
 
 
@@ -125,7 +117,7 @@ async def intake_manual_arco(
         requester_name=payload.requester_name,
         requester_email=str(payload.requester_email),
         details=payload.details,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )
 
 
@@ -144,7 +136,7 @@ async def respond_arco(
         principal,
         request_id,
         response_text=payload.response_text,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )
 
 
@@ -160,5 +152,5 @@ async def close_arco(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> dict[str, Any]:
     return await _arco(session, redis).close(
-        principal, request_id, ip=_client_ip(request)
+        principal, request_id, ip=client_ip(request)
     )

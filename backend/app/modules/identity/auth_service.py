@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from redis.asyncio import Redis
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.core.errors import AppError
 from app.core.rate_limit import (
     enforce_rate_limit,
     login_rate_key,
+    mfa_rate_key,
     password_reset_rate_key,
     redis_unavailable_error,
     resend_rate_key,
@@ -34,7 +35,6 @@ from app.modules.identity.password_service import PasswordService
 from app.modules.identity.session_service import SessionService
 from app.modules.tenancy.models import Tenant
 from app.modules.tenancy.provisioner import TenantProvisioner
-from app.worker import enqueue_job
 
 MFA_ROLES = frozenset({"administrador", "gerente"})
 _MFA_ROLES = MFA_ROLES
@@ -44,6 +44,14 @@ _INVALID_CREDENTIALS = AppError(
     "Credenciales inválidas",
     "Credenciales inválidas",
 )
+_MFA_INVALID = AppError(
+    401,
+    "mfa_invalid",
+    "Código inválido",
+    "El código de autenticación no es válido.",
+)
+_MFA_FAILURE_LIMIT = 5
+_MFA_FAILURE_WINDOW = 300
 
 
 @dataclass
@@ -141,7 +149,7 @@ class AuthService:
             role="administrador",
             status="active",
             mfa_status="pending",
-            password_hash=self._passwords.hash(cmd.password),
+            password_hash=await self._passwords.hash(cmd.password),
         )
         self._session.add(user)
         await self._session.flush()
@@ -166,12 +174,9 @@ class AuthService:
             self._session,
             to_email=email,
             template="verify_email",
-            payload={
-                "subject": "Verifica tu correo",
-                "body": f"Token: {raw_token}",
-                "token": raw_token,
-            },
+            payload={"subject": "Verifica tu correo"},
             tenant_id=tenant_id,
+            raw_token=raw_token,
         )
         await self._audit.append(
             self._session,
@@ -221,7 +226,8 @@ class AuthService:
             )
         row.consumed_at = _now()
         user.email_verified_at = _now()
-        tenant.status = "provisioning"
+        if tenant.status != "active":
+            tenant.status = "provisioning"
         identity = await self._session.scalar(
             select(EmailIdentity).where(EmailIdentity.user_id == user.id)
         )
@@ -234,12 +240,6 @@ class AuthService:
             tenant_id=tenant.id,
         )
         await self._session.commit()
-        try:
-            await enqueue_job(
-                self._redis, "provision_tenant", {"tenant_id": str(tenant.id)}
-            )
-        except Exception:
-            pass
         provisioner = TenantProvisioner(self._session)
         provisioned = await provisioner.provision(tenant.id)
         provisioned.status = "active"
@@ -263,12 +263,9 @@ class AuthService:
             self._session,
             to_email=identity.email,
             template="verify_email",
-            payload={
-                "subject": "Verifica tu correo",
-                "body": f"Token: {raw_token}",
-                "token": raw_token,
-            },
+            payload={"subject": "Verifica tu correo"},
             tenant_id=tenant.id,
+            raw_token=raw_token,
         )
         await self._session.commit()
 
@@ -295,7 +292,7 @@ class AuthService:
         user, tenant, identity = loaded  # type: ignore[misc]
         if user.status != "active" or not user.password_hash:
             await self._fail_login(email, ip, key)
-        if not self._passwords.verify(password, user.password_hash or ""):
+        if not await self._passwords.verify(password, user.password_hash or ""):
             await self._fail_login(email, ip, key)
         if user.email_verified_at is None:
             raise AppError(
@@ -311,15 +308,6 @@ class AuthService:
                 "Empresa no lista",
                 "La empresa aún no está lista.",
             )
-        await self._audit.append(
-            self._session,
-            event_type="auth.login.success",
-            actor_email=identity.email,
-            ip_address=ip,
-            tenant_id=tenant.id,
-            schema_name=tenant.schema_name if tenant.status == "active" else None,
-        )
-        await self._session.commit()
         if user.role in _MFA_ROLES and user.mfa_status == "pending":
             principal = build_principal(
                 user, tenant, identity.email, scope="mfa_enroll_only"
@@ -337,6 +325,15 @@ class AuthService:
             return LoginResult(status="mfa_required", mfa_challenge_id=challenge_id)
         principal = build_principal(user, tenant, identity.email, scope="full")
         session_id = await self._sessions.create(principal, scope="full")
+        await self._audit.append(
+            self._session,
+            event_type="auth.login.success",
+            actor_email=identity.email,
+            ip_address=ip,
+            tenant_id=tenant.id,
+            schema_name=tenant.schema_name if tenant.status == "active" else None,
+        )
+        await self._session.commit()
         return LoginResult(
             status="authenticated", principal=principal, session_id=session_id
         )
@@ -346,21 +343,38 @@ class AuthService:
     ) -> dict[str, Any]:
         challenge = await self._sessions.get_mfa_challenge(challenge_id)
         if challenge is None:
-            raise AppError(
-                401,
-                "mfa_invalid",
-                "Código inválido",
-                "El código de autenticación no es válido.",
-            )
-        user = await self._session.get(User, UUID(str(challenge["userId"])))
+            raise _MFA_INVALID
+        user_id = UUID(str(challenge["userId"]))
+        user = await self._session.scalar(
+            select(User).where(User.id == user_id).with_for_update()
+        )
         if user is None:
-            raise AppError(
-                401,
-                "mfa_invalid",
-                "Código inválido",
-                "El código de autenticación no es válido.",
+            raise _MFA_INVALID
+        try:
+            await self._mfa.verify_login(user, code)
+        except AppError:
+            tenant, identity = await self._tenant_and_email(user)
+            await self._audit.append(
+                self._session,
+                event_type="auth.login.failure",
+                actor_email=identity.email,
+                ip_address=ip,
+                tenant_id=tenant.id,
             )
-        self._mfa.verify_login(user, code)
+            await self._session.commit()
+            try:
+                failures = await enforce_rate_limit(
+                    self._redis,
+                    key=mfa_rate_key(challenge_id, str(user_id)),
+                    limit=_MFA_FAILURE_LIMIT,
+                    window_seconds=_MFA_FAILURE_WINDOW,
+                )
+            except AppError:
+                await self._sessions.delete_mfa_challenge(challenge_id)
+                raise
+            if failures >= _MFA_FAILURE_LIMIT:
+                await self._sessions.delete_mfa_challenge(challenge_id)
+            raise
         tenant, identity = await self._tenant_and_email(user)
         principal = build_principal(user, tenant, identity.email, scope="full")
         session_id = await self._sessions.create(principal, scope="full")
@@ -382,8 +396,8 @@ class AuthService:
         if user is None or user.mfa_status != "pending":
             raise AppError(
                 403,
-                "csrf_rejected",
-                "Solicitud rechazada",
+                "forbidden",
+                "Acceso denegado",
                 "No puedes enrolar MFA en este momento.",
             )
         otpauth_url, encrypted = self._mfa.start_enroll(email)
@@ -394,19 +408,29 @@ class AuthService:
     async def confirm_totp_enroll(
         self, user_id: UUID, code: str, *, ip: str
     ) -> tuple[list[str], str, dict[str, Any]]:
-        user = await self._session.get(User, user_id)
+        user = await self._session.scalar(
+            select(User).where(User.id == user_id).with_for_update()
+        )
         if user is None or user.mfa_status != "pending":
             raise AppError(
                 403,
-                "csrf_rejected",
-                "Solicitud rechazada",
+                "forbidden",
+                "Acceso denegado",
                 "No puedes enrolar MFA en este momento.",
             )
-        codes = self._mfa.enroll(user, code)
+        codes = await self._mfa.enroll(user, code)
         tenant, identity = await self._tenant_and_email(user)
         await self._audit.append(
             self._session,
             event_type="auth.mfa.enrolled",
+            actor_email=identity.email,
+            ip_address=ip,
+            tenant_id=tenant.id,
+            schema_name=tenant.schema_name,
+        )
+        await self._audit.append(
+            self._session,
+            event_type="auth.login.success",
             actor_email=identity.email,
             ip_address=ip,
             tenant_id=tenant.id,
@@ -439,12 +463,9 @@ class AuthService:
             self._session,
             to_email=identity.email,
             template="password_reset",
-            payload={
-                "subject": "Restablece tu contraseña",
-                "body": f"Token: {raw}",
-                "token": raw,
-            },
+            payload={"subject": "Restablece tu contraseña"},
             tenant_id=tenant.id,
+            raw_token=raw,
         )
         await self._session.commit()
 
@@ -469,8 +490,16 @@ class AuthService:
                 "Enlace inválido",
                 "El enlace no es válido o expiró.",
             )
-        row.consumed_at = _now()
-        user.password_hash = self._passwords.hash(password)
+        await self._session.execute(
+            update(PasswordResetToken)
+            .where(
+                PasswordResetToken.user_id == user.id,
+                PasswordResetToken.consumed_at.is_(None),
+            )
+            .values(consumed_at=_now())
+        )
+        user.password_hash = await self._passwords.hash(password)
+        await self._sessions.revoke_for_user(user.id)
         identity = await self._session.scalar(
             select(EmailIdentity).where(EmailIdentity.user_id == user.id)
         )

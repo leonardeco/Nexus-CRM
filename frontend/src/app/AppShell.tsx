@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   LogOut,
@@ -25,6 +25,7 @@ const ADMIN_LINKS = [
 export function AppShell() {
   const principal = useAuthStore((state) => state.principal);
   const setPrincipal = useAuthStore((state) => state.setPrincipal);
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const isAdmin = principal?.role === "administrador";
@@ -33,6 +34,7 @@ export function AppShell() {
     mutationFn: () => api<void>("/sessions/current", { method: "DELETE" }),
     onSettled: () => {
       setPrincipal(null);
+      queryClient.clear();
       navigate("/ingresar", { replace: true });
     },
   });

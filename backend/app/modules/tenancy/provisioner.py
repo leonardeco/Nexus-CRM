@@ -1,15 +1,19 @@
 import asyncio
+import logging
 from argparse import Namespace
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.identifiers import SCHEMA_NAME_RE, schema_name_for
+from app.modules.identity.models import User
 from app.modules.tenancy.models import Tenant
+
+log = logging.getLogger("nexus.provisioner")
 
 
 def _backend_root() -> Path:
@@ -64,9 +68,10 @@ class TenantProvisioner:
             )
             self._session.add(tenant)
         else:
-            tenant.status = "provisioning"
             if SCHEMA_NAME_RE.match(tenant.schema_name) is None:
                 tenant.schema_name = schema_name_for(tenant.id)
+            if tenant.status != "active":
+                tenant.status = "provisioning"
         await self._session.flush()
         schema_name = tenant.schema_name
         quoted = _quoted_schema(schema_name)
@@ -82,6 +87,18 @@ class TenantProvisioner:
         return tenant
 
     async def rollback(self, tenant_id: UUID) -> None:
+        users = await self._session.scalar(
+            select(func.count()).select_from(User).where(User.tenant_id == tenant_id)
+        )
+        if int(users or 0) > 0:
+            log.warning("skip schema drop; tenant %s already has users", tenant_id)
+            tenant = await self._session.get(Tenant, tenant_id)
+            if tenant is not None and tenant.status == "active":
+                pass
+            elif tenant is not None:
+                tenant.status = "provisioning"
+            await self._session.commit()
+            return
         schema_name = schema_name_for(tenant_id)
         quoted = _quoted_schema(schema_name)
         await self._session.execute(text(f"DROP SCHEMA IF EXISTS {quoted} CASCADE"))

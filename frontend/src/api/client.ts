@@ -40,25 +40,26 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
 
   const text = await response.text();
-  const parsed = parseBody(text);
-
   if (!response.ok) {
+    let parsed: unknown;
+    try {
+      parsed = text.length === 0 ? {} : JSON.parse(text);
+    } catch {
+      throw new Error("Respuesta inválida del servidor.");
+    }
     throw new ApiError(isRecord(parsed) ? parsed : {}, response.status);
   }
   if (response.status === 202 || response.status === 204 || text.length === 0) {
     return undefined as T;
   }
-  return parsed as T;
+  return parseBody(text) as T;
 }
 
 function parseBody(text: string): unknown {
-  if (text.length === 0) {
-    return undefined;
-  }
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    return undefined;
+    throw new Error("Respuesta inválida del servidor.");
   }
 }
 

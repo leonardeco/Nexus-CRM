@@ -20,7 +20,7 @@ from app.modules.tenancy.models import Tenant
 def forbidden() -> AppError:
     return AppError(
         403,
-        "csrf_rejected",
+        "forbidden",
         "Acceso denegado",
         "No tienes permiso para esta acción.",
     )

@@ -23,42 +23,6 @@ from tests.conftest import (
 _BACKUP_RE = re.compile(r"^[A-Z0-9]{8}$")
 
 
-async def _verify_token_for(email: str) -> str:
-    async with engine.connect() as conn:
-        payload = await conn.scalar(
-            text(
-                """
-                SELECT payload FROM catalog.email_outbox
-                WHERE lower(to_email) = lower(:email)
-                  AND template = 'verify_email'
-                ORDER BY created_at DESC
-                LIMIT 1
-                """
-            ),
-            {"email": email},
-        )
-    assert payload is not None
-    if isinstance(payload, str):
-        import json
-
-        payload = json.loads(payload)
-    return str(payload["token"])
-
-
-async def _signup_and_verify(client: AsyncClient, payload: dict[str, object]) -> None:
-    created = await client.post(
-        "/api/v1/public/signups", headers=CSRF_HEADERS, json=payload
-    )
-    assert created.status_code == 202
-    token = await _verify_token_for(str(payload["email"]))
-    verified = await client.post(
-        "/api/v1/public/email-verifications",
-        headers=CSRF_HEADERS,
-        json={"token": token},
-    )
-    assert verified.status_code == 204
-
-
 async def test_tc_3_2_sixth_failed_login_is_rate_limited(client: AsyncClient) -> None:
     email = unique_email()
     login = {"email": email, "password": "WrongPass1x"}
@@ -80,7 +44,7 @@ async def test_tc_4_1_admin_login_enrolls_totp_and_backup_codes(
     client: AsyncClient,
 ) -> None:
     payload = signup_payload()
-    await _signup_and_verify(client, payload)
+    await signup_and_verify(client, payload)
 
     login = await client.post(
         "/api/v1/public/sessions",
@@ -575,6 +539,44 @@ async def test_tc_4_8_enroll_only_scope_cannot_reach_admin_surfaces(
         },
     )
     assert invite.status_code == 403
+    assert invite.json()["code"] == "forbidden"
+
+
+async def test_tc_4_9_mfa_failures_are_rate_limited_and_invalidate_challenge(
+    client: AsyncClient,
+) -> None:
+    admin = await enroll_admin(client)
+    await client.request("DELETE", "/api/v1/sessions/current", headers=CSRF_HEADERS)
+    login = await client.post(
+        "/api/v1/public/sessions",
+        headers=CSRF_HEADERS,
+        json={"email": admin["signup"]["email"], "password": VALID_PASSWORD},
+    )
+    challenge_id = login.json()["mfaChallengeId"]
+    for attempt in range(5):
+        wrong = await client.post(
+            "/api/v1/public/sessions/mfa",
+            headers=CSRF_HEADERS,
+            json={"challengeId": challenge_id, "code": "000000"},
+        )
+        assert wrong.status_code == 401, attempt
+        assert wrong.json()["code"] == "mfa_invalid"
+    sixth = await client.post(
+        "/api/v1/public/sessions/mfa",
+        headers=CSRF_HEADERS,
+        json={"challengeId": challenge_id, "code": "000000"},
+    )
+    assert sixth.status_code in {401, 429}
+    recovered = await client.post(
+        "/api/v1/public/sessions/mfa",
+        headers=CSRF_HEADERS,
+        json={
+            "challengeId": challenge_id,
+            "code": pyotp.TOTP(str(admin["secret"])).now(),
+        },
+    )
+    assert recovered.status_code in {401, 429}
+    _no_session_cookie(recovered)
 
 
 async def _set_seat_cap(tenant_id: str, seat_cap: int) -> None:

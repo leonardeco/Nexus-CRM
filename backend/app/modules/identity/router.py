@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
+from app.core.http import client_ip
 from app.db.engine import get_session
 from app.modules.identity.auth_service import AuthService, SignupCommand
 from app.modules.identity.invite_service import InviteService
@@ -88,15 +89,6 @@ class PatchTenantRequest(ApiModel):
     policy_version: str | None = None
 
 
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
-    if request.client is not None:
-        return request.client.host
-    return "0.0.0.0"
-
-
 def _auth(session: AsyncSession, redis: Redis) -> AuthService:
     return AuthService(session, redis)
 
@@ -117,7 +109,7 @@ def _set_session_cookie(response: Response, session_id: str) -> None:
         samesite="lax",
         path="/",
         max_age=settings.session_ttl_seconds,
-        secure=False,
+        secure=settings.session_cookie_secure,
     )
 
 
@@ -139,7 +131,7 @@ async def create_signup(
             accept_habeas_data=bool(payload.accept_habeas_data),
             policy_version=payload.policy_version,
         ),
-        ip=_client_ip(request),
+        ip=client_ip(request),
         user_agent=request.headers.get("User-Agent", ""),
     )
     return Response(status_code=202)
@@ -152,7 +144,7 @@ async def verify_email(
     session: Annotated[AsyncSession, Depends(get_session)],
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> Response:
-    await _auth(session, redis).verify_email(payload.token, ip=_client_ip(request))
+    await _auth(session, redis).verify_email(payload.token, ip=client_ip(request))
     return Response(status_code=204)
 
 
@@ -164,7 +156,7 @@ async def resend_verification(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> Response:
     await _auth(session, redis).resend_verification(
-        str(payload.email), ip=_client_ip(request)
+        str(payload.email), ip=client_ip(request)
     )
     return Response(status_code=202)
 
@@ -177,7 +169,7 @@ async def create_session(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> JSONResponse:
     result = await _auth(session, redis).login(
-        str(payload.email), payload.password, ip=_client_ip(request)
+        str(payload.email), payload.password, ip=client_ip(request)
     )
     body: dict[str, Any] = {"status": result.status}
     if result.mfa_challenge_id is not None:
@@ -195,7 +187,7 @@ async def create_session(
                 samesite="lax",
                 path="/",
                 max_age=600,
-                secure=False,
+                secure=settings.session_cookie_secure,
             )
     return response
 
@@ -208,7 +200,7 @@ async def complete_mfa(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> JSONResponse:
     principal = await _auth(session, redis).complete_mfa(
-        payload.challenge_id, payload.code, ip=_client_ip(request)
+        payload.challenge_id, payload.code, ip=client_ip(request)
     )
     session_id = str(principal.pop("sessionId"))
     response = JSONResponse(content=principal)
@@ -239,7 +231,7 @@ async def request_password_reset(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> Response:
     await _auth(session, redis).request_password_reset(
-        str(payload.email), ip=_client_ip(request)
+        str(payload.email), ip=client_ip(request)
     )
     return Response(status_code=202)
 
@@ -252,7 +244,7 @@ async def confirm_password_reset(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> Response:
     await _auth(session, redis).confirm_password_reset(
-        payload.token, payload.password, ip=_client_ip(request)
+        payload.token, payload.password, ip=client_ip(request)
     )
     return Response(status_code=204)
 
@@ -308,7 +300,7 @@ async def confirm_totp_enroll(
     codes, session_id, _updated = await _auth(session, redis).confirm_totp_enroll(
         UUID(str(principal["userId"])),
         payload.code,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )
     response = JSONResponse(content={"backupCodes": codes})
     _set_session_cookie(response, session_id)
@@ -330,7 +322,7 @@ async def create_invite(
         str(payload.email),
         payload.role,
         payload.full_name,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )
     return Response(status_code=201)
 
@@ -343,7 +335,7 @@ async def accept_invite(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> JSONResponse:
     principal = await _invites(session, redis).accept(
-        payload.token, payload.password, ip=_client_ip(request)
+        payload.token, payload.password, ip=client_ip(request)
     )
     session_id = str(principal.pop("sessionId"))
     response = JSONResponse(content=principal)
@@ -356,7 +348,7 @@ async def accept_invite(
             samesite="lax",
             path="/",
             max_age=600,
-            secure=False,
+            secure=settings.session_cookie_secure,
         )
     return response
 
@@ -383,7 +375,7 @@ async def deactivate_user(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> dict[str, Any]:
     return await _users(session, redis).deactivate(
-        principal, user_id, ip=_client_ip(request)
+        principal, user_id, ip=client_ip(request)
     )
 
 
@@ -399,7 +391,7 @@ async def change_user_role(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> dict[str, Any]:
     return await _users(session, redis).change_role(
-        principal, user_id, payload.role, ip=_client_ip(request)
+        principal, user_id, payload.role, ip=client_ip(request)
     )
 
 
@@ -428,5 +420,5 @@ async def patch_tenant(
         principal,
         company_name=payload.company_name,
         slug=payload.slug,
-        ip=_client_ip(request),
+        ip=client_ip(request),
     )

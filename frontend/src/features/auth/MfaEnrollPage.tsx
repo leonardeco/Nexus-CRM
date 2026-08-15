@@ -1,8 +1,10 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Smartphone } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, problemMessage } from "../../api/client";
+import type { SessionPrincipal } from "../../api/types";
+import { useAuthStore } from "../../stores/auth-store";
 import { AuthLayout } from "../../ui/AuthLayout";
 import { Button } from "../../ui/Button";
 import { TextField, focusFirstInvalid } from "../../ui/Field";
@@ -16,15 +18,37 @@ function secretFromOtpauth(url: string): string {
   }
 }
 
+function isOtpauthUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === "otpauth:";
+  } catch {
+    return false;
+  }
+}
+
 export function MfaEnrollPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const principal = useAuthStore((state) => state.principal);
+  const setPrincipal = useAuthStore((state) => state.setPrincipal);
   const [formError, setFormError] = useState<string>();
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+  const [codesSaved, setCodesSaved] = useState(false);
+  const started = useRef(false);
 
-  const enrollQuery = useQuery({
-    queryKey: ["mfa-enroll"],
-    queryFn: () => api<{ otpauthUrl: string }>("/me/mfa/totp", { method: "POST" }),
+  const enroll = useMutation({
+    mutationFn: () => api<{ otpauthUrl: string }>("/me/mfa/totp", { method: "POST" }),
   });
+
+  const startEnroll = enroll.mutate;
+
+  useEffect(() => {
+    if (started.current) {
+      return;
+    }
+    started.current = true;
+    startEnroll();
+  }, [startEnroll]);
 
   const confirm = useMutation({
     mutationFn: async (body: { code: string; backupCodesSaved: true }) =>
@@ -35,13 +59,21 @@ export function MfaEnrollPage() {
     onSuccess: (result) => {
       setBackupCodes(result.backupCodes);
       setFormError(undefined);
+      const updated: SessionPrincipal | null = principal
+        ? { ...principal, scope: "full", mfaStatus: "enrolled" }
+        : principal;
+      if (updated) {
+        queryClient.setQueryData(["me"], updated);
+        setPrincipal(updated);
+      }
     },
     onError: (error) => setFormError(problemMessage(error)),
   });
 
+  const otpauthUrl = enroll.data?.otpauthUrl ?? "";
   const secret = useMemo(
-    () => (enrollQuery.data ? secretFromOtpauth(enrollQuery.data.otpauthUrl) : ""),
-    [enrollQuery.data],
+    () => (otpauthUrl ? secretFromOtpauth(otpauthUrl) : ""),
+    [otpauthUrl],
   );
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -71,7 +103,27 @@ export function MfaEnrollPage() {
             </li>
           ))}
         </ul>
-        <Button type="button" onClick={() => navigate("/app/perfil", { replace: true })}>
+        <label className="consent-label">
+          <input
+            type="checkbox"
+            name="backupCodesSaved"
+            required
+            checked={codesSaved}
+            onChange={(event) => setCodesSaved(event.currentTarget.checked)}
+          />
+          <span>
+            Ya guardé los códigos
+            <span className="req" aria-hidden="true">
+              {" "}
+              *
+            </span>
+          </span>
+        </label>
+        <Button
+          type="button"
+          onClick={() => navigate("/app/perfil", { replace: true })}
+          disabled={!codesSaved}
+        >
           Continuar al perfil
         </Button>
       </AuthLayout>
@@ -83,17 +135,19 @@ export function MfaEnrollPage() {
       title="Activa la verificación en dos pasos"
       description="Escanea o ingresa la clave en tu aplicación de autenticación. Confirma con un código."
     >
-      {enrollQuery.isError ? (
+      {enroll.isError ? (
         <p className="alert alert-error" role="alert">
-          {problemMessage(enrollQuery.error)}
+          {problemMessage(enroll.error)}
         </p>
       ) : null}
-      {enrollQuery.data ? (
+      {enroll.data ? (
         <div className="stack">
           <Smartphone size={24} aria-hidden="true" />
           <p className="muted">Clave secreta</p>
           <p className="secret-box">{secret}</p>
-          <a href={enrollQuery.data.otpauthUrl}>Abrir en la aplicación de autenticación</a>
+          {isOtpauthUrl(otpauthUrl) ? (
+            <a href={otpauthUrl}>Abrir en la aplicación de autenticación</a>
+          ) : null}
         </div>
       ) : (
         <p className="muted">Preparando tu clave…</p>
@@ -105,20 +159,7 @@ export function MfaEnrollPage() {
           </p>
         ) : null}
         <TextField name="code" label="Código de la aplicación" required autoComplete="one-time-code" />
-        <label className="consent-label">
-          <input type="checkbox" name="backupCodesSaved" required />
-          <span>
-            Ya guardé los códigos
-            <span className="req" aria-hidden="true">
-              {" "}
-              *
-            </span>
-          </span>
-        </label>
-        <p className="muted">
-          Al confirmar verás 10 códigos de respaldo. Guárdalos antes de continuar.
-        </p>
-        <Button type="submit" loading={confirm.isPending} disabled={!enrollQuery.data}>
+        <Button type="submit" loading={confirm.isPending} disabled={!enroll.data}>
           Confirmar
         </Button>
       </form>

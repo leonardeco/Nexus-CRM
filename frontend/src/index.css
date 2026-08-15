@@ -317,6 +317,13 @@ a:hover {
   font-weight: 400;
 }
 
+.consent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .consent-label input[type="checkbox"] {
   width: 20px;
   height: 20px;

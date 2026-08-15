@@ -84,6 +84,7 @@ class UserService:
         target, email, tenant = await self._load_tenant_user(actor, user_id)
         if target.status != "active":
             return serialize_user(target, email)
+        await self._lock_tenant(target.tenant_id)
         if target.role == "administrador":
             if await self._active_admin_count(target.tenant_id) <= 1:
                 raise _last_admin()
@@ -115,6 +116,7 @@ class UserService:
         target, email, tenant = await self._load_tenant_user(actor, user_id)
         if target.status != "active":
             raise _not_found()
+        await self._lock_tenant(target.tenant_id)
         if (
             target.role == "administrador"
             and role != "administrador"
@@ -188,6 +190,14 @@ class UserService:
         if identity is None or tenant is None:
             raise _not_found()
         return target, identity.email, tenant
+
+    async def _lock_tenant(self, tenant_id: UUID) -> Tenant:
+        tenant = await self._session.scalar(
+            select(Tenant).where(Tenant.id == tenant_id).with_for_update()
+        )
+        if tenant is None:
+            raise _not_found()
+        return tenant
 
     async def _active_admin_count(self, tenant_id: UUID) -> int:
         count = await self._session.scalar(

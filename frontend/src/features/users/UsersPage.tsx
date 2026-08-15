@@ -74,6 +74,17 @@ export function UsersPage() {
 
   const users = usersQuery.data ?? [];
 
+  if (usersQuery.isError) {
+    return (
+      <div className="stack-lg">
+        <h1>Usuarios</h1>
+        <p className="alert alert-error" role="alert">
+          {problemMessage(usersQuery.error)}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="stack-lg">
       <h1>Usuarios</h1>

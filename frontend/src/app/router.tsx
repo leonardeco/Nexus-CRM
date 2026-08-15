@@ -42,6 +42,13 @@ function SessionGate({ children }: { children: ReactNode }) {
   if (sessionQuery.isLoading) {
     return <p className="muted">Cargando…</p>;
   }
+  if (sessionQuery.isError) {
+    return (
+      <p className="alert alert-error" role="alert">
+        No se pudo comprobar la sesión. Intenta de nuevo.
+      </p>
+    );
+  }
   return children;
 }
 

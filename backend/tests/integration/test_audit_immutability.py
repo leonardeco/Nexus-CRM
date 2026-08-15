@@ -7,28 +7,7 @@ from sqlalchemy import text
 from app.db.engine import engine
 from app.db.search_path import set_search_path
 from tests.conftest import CSRF_HEADERS, VALID_PASSWORD, signup_payload
-
-
-async def _outbox_token(email: str, template: str) -> str:
-    async with engine.connect() as conn:
-        payload = await conn.scalar(
-            text(
-                """
-                SELECT payload FROM catalog.email_outbox
-                WHERE lower(to_email) = lower(:email)
-                  AND template = :template
-                ORDER BY created_at DESC
-                LIMIT 1
-                """
-            ),
-            {"email": email, "template": template},
-        )
-    assert payload is not None
-    if isinstance(payload, str):
-        import json
-
-        payload = json.loads(payload)
-    return str(payload["token"])
+from tests.conftest import outbox_token as _outbox_token
 
 
 async def _enroll_admin(client: AsyncClient) -> dict[str, object]:
@@ -119,3 +98,57 @@ async def test_tc_8_3_update_and_delete_leave_audit_row_unchanged(
     assert after["event_type"] == original["event_type"]
     assert after["event_type"] != "tampered"
     assert after["actor_email"] == original["actor_email"]
+
+
+async def test_platform_audit_events_reject_update_and_delete(
+    client: AsyncClient,
+) -> None:
+    admin = await _enroll_admin(client)
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    SELECT id, event_type, actor_email
+                    FROM catalog.platform_audit_events
+                    WHERE tenant_id = :tenant_id
+                    ORDER BY occurred_at
+                    LIMIT 1
+                    """
+                ),
+                {"tenant_id": str(admin["me"]["tenantId"])},
+            )
+        ).mappings().first()
+        assert row is not None
+        original = dict(row)
+        await conn.execute(
+            text(
+                """
+                UPDATE catalog.platform_audit_events
+                SET event_type = :tampered
+                WHERE id = :id
+                """
+            ),
+            {"id": original["id"], "tampered": "tampered"},
+        )
+        await conn.execute(
+            text("DELETE FROM catalog.platform_audit_events WHERE id = :id"),
+            {"id": original["id"]},
+        )
+        after = (
+            await conn.execute(
+                text(
+                    """
+                    SELECT id, event_type, actor_email
+                    FROM catalog.platform_audit_events
+                    WHERE id = :id
+                    """
+                ),
+                {"id": original["id"]},
+            )
+        ).mappings().first()
+    assert after is not None
+    assert after["event_type"] == original["event_type"]
+    assert after["event_type"] != "tampered"
+    assert after["actor_email"] == original["actor_email"]
+

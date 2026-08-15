@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.db.engine import engine
 from app.main import app
 from tests.conftest import CSRF_HEADERS, VALID_PASSWORD, signup_payload, unique_email
+from tests.conftest import outbox_token as _outbox_token
 
 _NOT_FOUND = {
     "type": "https://nexus.crm/problems/not_found",
@@ -17,28 +18,6 @@ _NOT_FOUND = {
     "code": "not_found",
 }
 _PUBLIC_TYPES = ("acceso", "rectificacion", "cancelacion", "oposicion")
-
-
-async def _outbox_token(email: str, template: str) -> str:
-    async with engine.connect() as conn:
-        payload = await conn.scalar(
-            text(
-                """
-                SELECT payload FROM catalog.email_outbox
-                WHERE lower(to_email) = lower(:email)
-                  AND template = :template
-                ORDER BY created_at DESC
-                LIMIT 1
-                """
-            ),
-            {"email": email, "template": template},
-        )
-    assert payload is not None
-    if isinstance(payload, str):
-        import json
-
-        payload = json.loads(payload)
-    return str(payload["token"])
 
 
 async def _enroll_admin(client: AsyncClient) -> dict[str, object]:

@@ -8,30 +8,9 @@ from sqlalchemy import text
 from app.db.engine import engine
 from app.main import app
 from tests.conftest import CSRF_HEADERS, VALID_PASSWORD, signup_payload, unique_email
+from tests.conftest import outbox_token as _outbox_token
 
 _INVITE_PASSWORD = "InvitePass1x"
-
-
-async def _outbox_token(email: str, template: str) -> str:
-    async with engine.connect() as conn:
-        payload = await conn.scalar(
-            text(
-                """
-                SELECT payload FROM catalog.email_outbox
-                WHERE lower(to_email) = lower(:email)
-                  AND template = :template
-                ORDER BY created_at DESC
-                LIMIT 1
-                """
-            ),
-            {"email": email, "template": template},
-        )
-    assert payload is not None
-    if isinstance(payload, str):
-        import json
-
-        payload = json.loads(payload)
-    return str(payload["token"])
 
 
 async def _enroll_admin(client: AsyncClient) -> dict[str, object]:
@@ -701,12 +680,14 @@ async def test_tc_6_8_role_or_deactivation_is_reread_every_request(
 async def _assert_admin_forbidden(actor: AsyncClient) -> None:
     listed = await actor.get("/api/v1/users")
     assert listed.status_code == 403
+    assert listed.json()["code"] == "forbidden"
     patched = await actor.patch(
         "/api/v1/tenant",
         headers=CSRF_HEADERS,
         json={"companyName": "Hack"},
     )
     assert patched.status_code == 403
+    assert patched.json()["code"] == "forbidden"
     invited = await actor.post(
         "/api/v1/invites",
         headers=CSRF_HEADERS,
@@ -717,6 +698,7 @@ async def _assert_admin_forbidden(actor: AsyncClient) -> None:
         },
     )
     assert invited.status_code == 403
+    assert invited.json()["code"] == "forbidden"
     inbox = await actor.get("/api/v1/arco-requests")
     assert inbox.status_code == 403
     audit = await actor.get("/api/v1/audit-events")

@@ -1,9 +1,13 @@
 import json
 import os
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
+
+os.environ["NEXUS_DATA_KEY"] = "0123456789abcdef0123456789abcdef"
+os.environ["SESSION_COOKIE_SECURE"] = "false"
 
 from tests._bootstrap_local import ensure_local_services
 
@@ -28,6 +32,8 @@ CSRF_HEADERS = {"X-Nexus-Client": "web"}
 VALID_PASSWORD = "ValidPass1x"
 
 _shared_redis: FakeAsyncRedis | None = None
+_captured_mail: list[dict[str, str]] = []
+_TOKEN_RE = re.compile(r"Token:\s+(\S+)")
 
 
 def _run_catalog_migrations() -> None:
@@ -66,6 +72,26 @@ async def client() -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def capture_smtp(monkeypatch: pytest.MonkeyPatch) -> None:
+    _captured_mail.clear()
+
+    def _fake_send(
+        to_email: str, subject: str, body: str, template: str = ""
+    ) -> None:
+        _captured_mail.append(
+            {
+                "to": to_email,
+                "subject": subject,
+                "body": body,
+                "template": template,
+            }
+        )
+
+    monkeypatch.setattr("app.modules.emailing.outbox.send_email", _fake_send)
+    monkeypatch.setattr("app.modules.emailing.mailer.send_email", _fake_send)
 
 
 @pytest.fixture(autouse=True)
@@ -111,14 +137,17 @@ def signup_payload(**overrides: object) -> dict[str, object]:
     return body
 
 
-def _payload_token(payload: object) -> str:
-    if isinstance(payload, str):
-        payload = json.loads(payload)
-    assert isinstance(payload, dict)
-    return str(payload["token"])
-
-
 async def outbox_token(email: str, template: str) -> str:
+    matches = [
+        item
+        for item in _captured_mail
+        if item["to"].lower() == email.lower() and item["template"] == template
+    ]
+    assert matches, f"no captured SMTP token for {email} {template}"
+    body = matches[-1]["body"]
+    found = _TOKEN_RE.search(body)
+    assert found is not None, body
+    token = found.group(1)
     async with engine.connect() as conn:
         payload = await conn.scalar(
             text(
@@ -133,7 +162,12 @@ async def outbox_token(email: str, template: str) -> str:
             {"email": email, "template": template},
         )
     assert payload is not None
-    return _payload_token(payload)
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    assert isinstance(payload, dict)
+    assert "token" not in payload
+    assert token not in json.dumps(payload)
+    return token
 
 
 async def outbox_count(email: str, template: str) -> int:

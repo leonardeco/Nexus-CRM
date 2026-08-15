@@ -124,12 +124,9 @@ class InviteService:
             self._session,
             to_email=email_norm,
             template="invite",
-            payload={
-                "subject": "Invitación a NEXUS CRM",
-                "body": f"Token: {raw}",
-                "token": raw,
-            },
+            payload={"subject": "Invitación a NEXUS CRM"},
             tenant_id=tenant_id,
+            raw_token=raw,
         )
         await self._audit.append(
             self._session,
@@ -173,7 +170,7 @@ class InviteService:
             role=invite.role,
             status="active",
             mfa_status="pending" if invite.role in MFA_ROLES else "not_required",
-            password_hash=self._passwords.hash(password),
+            password_hash=await self._passwords.hash(password),
             email_verified_at=_now(),
         )
         self._session.add(user)

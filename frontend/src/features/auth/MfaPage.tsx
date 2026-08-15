@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api, problemMessage } from "../../api/client";
 import type { SessionPrincipal } from "../../api/types";
 import { useAuthStore } from "../../stores/auth-store";
@@ -9,9 +9,10 @@ import { Button } from "../../ui/Button";
 import { TextField, focusFirstInvalid } from "../../ui/Field";
 
 export function MfaPage() {
-  const [params] = useSearchParams();
-  const challengeId = params.get("challenge") ?? "";
+  const challengeId = useAuthStore((state) => state.mfaChallengeId) ?? "";
+  const setMfaChallengeId = useAuthStore((state) => state.setMfaChallengeId);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setPrincipal = useAuthStore((state) => state.setPrincipal);
   const [formError, setFormError] = useState<string>();
 
@@ -22,7 +23,10 @@ export function MfaPage() {
         body: JSON.stringify({ challengeId, code }),
       }),
     onSuccess: (principal) => {
-      setPrincipal(principal);
+      const updated = { ...principal, scope: "full" as const };
+      queryClient.setQueryData(["me"], updated);
+      setPrincipal(updated);
+      setMfaChallengeId(null);
       navigate("/app/perfil", { replace: true });
     },
     onError: (error) => setFormError(problemMessage(error)),

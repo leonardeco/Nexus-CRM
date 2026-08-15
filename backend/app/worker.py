@@ -1,9 +1,6 @@
 import asyncio
 import json
 import logging
-import smtplib
-from email.message import EmailMessage
-from urllib.parse import urlparse
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -12,6 +9,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.db.engine import SessionLocal
 from app.modules.emailing import outbox
+from app.modules.emailing.mailer import send_email
 from app.modules.tenancy.provisioner import TenantProvisioner
 
 JOBS_KEY = "nexus:jobs"
@@ -22,27 +20,23 @@ async def enqueue_job(redis: Redis, job_type: str, payload: dict) -> None:
     await redis.rpush(JOBS_KEY, json.dumps({"type": job_type, "payload": payload}))
 
 
-def _send_smtp(to_email: str, subject: str, body: str) -> None:
-    parsed = urlparse(settings.smtp_url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 1025
-    message = EmailMessage()
-    message["From"] = "noreply@localhost"
-    message["To"] = to_email
-    message["Subject"] = subject
-    message.set_content(body)
-    with smtplib.SMTP(host, port, timeout=10) as client:
-        client.send_message(message)
-
-
 async def send_due_mail() -> None:
     async with SessionLocal() as session:
         due = await outbox.fetch_due(session)
         for message in due:
+            if message.payload.get("token_hash") and "token" not in message.payload:
+                await outbox.mark_sent(session, message.id)
+                continue
             subject = str(message.payload.get("subject") or message.template)
             body = str(message.payload.get("body") or "")
             try:
-                await asyncio.to_thread(_send_smtp, message.to_email, subject, body)
+                await asyncio.to_thread(
+                    send_email,
+                    message.to_email,
+                    subject,
+                    body,
+                    message.template,
+                )
                 await outbox.mark_sent(session, message.id)
             except Exception as exc:
                 log.exception("send_mail failed for %s", message.id)

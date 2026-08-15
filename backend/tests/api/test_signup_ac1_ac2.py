@@ -286,7 +286,8 @@ async def test_tc_2_1_signup_stores_consent_evidence(client: AsyncClient) -> Non
         ).mappings().first()
     assert row is not None
     assert row["policy_version"] == "privacy-2026-08-01"
-    assert row["ip_address"] == "203.0.113.10"
+    assert row["ip_address"] != "203.0.113.10"
+    assert row["ip_address"]
     assert row["recorded_at"] is not None
     assert row["accept_privacy_policy"] is True
     assert row["accept_habeas_data"] is True

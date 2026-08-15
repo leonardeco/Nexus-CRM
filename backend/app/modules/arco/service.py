@@ -107,7 +107,7 @@ class ArcoService:
         if actor.get("scope") != "full":
             raise AppError(
                 403,
-                "csrf_rejected",
+                "forbidden",
                 "Acceso denegado",
                 "No tienes permiso para esta acción.",
             )
