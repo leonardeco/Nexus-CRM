@@ -8,8 +8,7 @@ import socket
 import threading
 from pathlib import Path
 
-_ARTIFACTS = Path(r"C:\Users\MI PC\.config\hydraia\artifacts\crm-e2df1f")
-_PGDATA = _ARTIFACTS / ".pgdata"
+_PGDATA = Path(__file__).resolve().parents[2] / ".pgdata"
 _REDIS_PORT = 6379
 
 _pg_server = None

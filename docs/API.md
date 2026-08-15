@@ -57,8 +57,7 @@ Contract vs code as of this sync. Not filled in by guessing.
 - **`GET /api/v1/readyz`** is implemented (Redis ping + `SELECT 1`) and CSRF-skipped. It is **not** in the contract. Not listed as a public operation above.
 - **`PATCH /tenant` `policyVersion`:** the contract schema includes `policyVersion`. The request model accepts it; `UserService.patch_tenant` applies `companyName` and `slug` only.
 - **Problem `code` `forbidden`:** RBAC returns this code. It is not in the contract `Problem.code` enum.
-- **Version strings:** Python/JS packages are `0.1.0`; OpenAPI `info.version` is `1.0.0`.
-- **Artifacts copy:** `~/.config/hydraia/artifacts/crm-e2df1f/specs/2026-08-15-nexus-crm-foundation-openapi.yaml` is behind the repo contract (no `/healthz`, no CSRF parameter refs, fewer status codes). Repo `api/openapi.yaml` is the live contract.
+- **Version strings:** Python/JS packages are `0.1.0`; OpenAPI `info.version` is `1.0.0`. The live HTTP contract is `api/openapi.yaml` in this repo.
 
 ### Matched
 
