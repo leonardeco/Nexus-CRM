@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" role="img" aria-label="NEXUS CRM  Foundation">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#07111F"/>
+      <stop offset="55%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#0B1B33"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2563EB" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#2563EB" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#059669" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1E3A5F" stroke-opacity="0.35" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="360" fill="url(#bg)"/>
+  <rect width="1280" height="360" fill="url(#grid)" opacity="0.45"/>
+  <circle cx="1080" cy="-40" r="220" fill="#2563EB" opacity="0.12"/>
+  <circle cx="1180" cy="320" r="160" fill="#059669" opacity="0.10"/>
+  <rect x="0" y="0" width="1280" height="360" fill="url(#glow)"/>
+
+  <g transform="translate(72 96)">
+    <rect width="88" height="88" rx="20" fill="#111827"/>
+    <rect x="2" y="2" width="84" height="84" rx="18" fill="none" stroke="#3B82F6" stroke-opacity="0.7" stroke-width="2"/>
+    <path d="M22 66V22h11l18.2 26.2V22H62v44h-11L32.8 39.8V66H22z" fill="#F8FAFC"/>
+    <rect x="22" y="70" width="40" height="4" rx="2" fill="#059669"/>
+  </g>
+
+  <text x="188" y="148" fill="#F8FAFC" font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="64" font-weight="800" letter-spacing="1.5">NEXUS</text>
+  <text x="432" y="148" fill="#3B82F6" font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="64" font-weight="800" letter-spacing="1.5">CRM</text>
+
+  <text x="188" y="196" fill="#94A3B8" font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="600">CRM multi-tenant para PyMEs en LATAM</text>
+
+  <g font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700">
+    <rect x="188" y="228" width="132" height="32" rx="16" fill="#1E3A8A"/>
+    <text x="254" y="249" text-anchor="middle" fill="#DBEAFE">FOUNDATION</text>
+    <rect x="332" y="228" width="118" height="32" rx="16" fill="#064E3B"/>
+    <text x="391" y="249" text-anchor="middle" fill="#A7F3D0">LEY 1581</text>
+    <rect x="462" y="228" width="96" height="32" rx="16" fill="#1E293B"/>
+    <text x="510" y="249" text-anchor="middle" fill="#E2E8F0">MFA TOTP</text>
+    <rect x="570" y="228" width="128" height="32" rx="16" fill="#1E293B"/>
+    <text x="634" y="249" text-anchor="middle" fill="#E2E8F0">SCHEMA/TENANT</text>
+  </g>
+
+  <rect x="0" y="356" width="1280" height="4" fill="#2563EB"/>
+</svg>
