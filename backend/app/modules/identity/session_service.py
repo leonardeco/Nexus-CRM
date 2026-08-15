@@ -11,6 +11,7 @@ from app.core.rate_limit import redis_unavailable_error
 
 _SESSION_PREFIX = "sess:"
 _CHALLENGE_PREFIX = "mfa:"
+_USER_SESS_PREFIX = "user_sess:"
 
 
 class SessionService:
@@ -42,6 +43,11 @@ class SessionService:
                 json.dumps(payload),
                 ex=settings.session_idle_seconds,
             )
+            user_id = principal.get("userId")
+            if user_id:
+                user_key = f"{_USER_SESS_PREFIX}{user_id}"
+                await self._redis.sadd(user_key, session_id)
+                await self._redis.expire(user_key, settings.session_ttl_seconds)
         except Exception as exc:
             raise redis_unavailable_error() from exc
         return session_id
@@ -69,7 +75,25 @@ class SessionService:
 
     async def delete(self, session_id: str) -> None:
         try:
+            raw = await self._redis.get(f"{_SESSION_PREFIX}{session_id}")
             await self._redis.delete(f"{_SESSION_PREFIX}{session_id}")
+            if raw:
+                data = json.loads(raw)
+                user_id = data.get("userId")
+                if user_id:
+                    await self._redis.srem(f"{_USER_SESS_PREFIX}{user_id}", session_id)
+        except Exception as exc:
+            raise redis_unavailable_error() from exc
+
+    async def revoke_for_user(self, user_id: UUID) -> None:
+        await self._ping()
+        user_key = f"{_USER_SESS_PREFIX}{user_id}"
+        try:
+            session_ids = await self._redis.smembers(user_key)
+            keys = [f"{_SESSION_PREFIX}{sid}" for sid in session_ids]
+            if keys:
+                await self._redis.delete(*keys)
+            await self._redis.delete(user_key)
         except Exception as exc:
             raise redis_unavailable_error() from exc
 

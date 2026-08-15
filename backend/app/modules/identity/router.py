@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -13,6 +12,10 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.db.engine import get_session
 from app.modules.identity.auth_service import AuthService, SignupCommand
+from app.modules.identity.invite_service import InviteService
+from app.modules.identity.user_service import UserService
+from app.modules.rbac.deps import get_redis, require_permission, require_principal
+from app.modules.rbac.permissions import Permission
 
 router = APIRouter(prefix="/api/v1")
 
@@ -64,12 +67,25 @@ class ConfirmTotpRequest(ApiModel):
     backup_codes_saved: Literal[True]
 
 
-async def get_redis() -> AsyncIterator[Redis]:
-    redis = Redis.from_url(settings.redis_url, decode_responses=True)
-    try:
-        yield redis
-    finally:
-        await redis.aclose()
+class InviteRequest(ApiModel):
+    email: EmailStr
+    role: Literal["administrador", "gerente", "vendedor"]
+    full_name: str
+
+
+class AcceptInviteRequest(ApiModel):
+    token: str
+    password: str = Field(min_length=10)
+
+
+class ChangeRoleRequest(ApiModel):
+    role: Literal["administrador", "gerente", "vendedor"]
+
+
+class PatchTenantRequest(ApiModel):
+    company_name: str | None = None
+    slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]{3,63}$")
+    policy_version: str | None = None
 
 
 def _client_ip(request: Request) -> str:
@@ -85,29 +101,12 @@ def _auth(session: AsyncSession, redis: Redis) -> AuthService:
     return AuthService(session, redis)
 
 
-async def require_principal(
-    request: Request,
-    session: Annotated[AsyncSession, Depends(get_session)],
-    redis: Annotated[Redis, Depends(get_redis)],
-) -> dict[str, Any]:
-    token = request.cookies.get(settings.session_cookie_name)
-    if not token:
-        raise AppError(
-            401,
-            "invalid_credentials",
-            "Credenciales inválidas",
-            "Credenciales inválidas",
-        )
-    principal = await _auth(session, redis).load_session(token)
-    if principal is None:
-        raise AppError(
-            401,
-            "invalid_credentials",
-            "Credenciales inválidas",
-            "Credenciales inválidas",
-        )
-    request.state.session_id = token
-    return principal
+def _invites(session: AsyncSession, redis: Redis) -> InviteService:
+    return InviteService(session, redis)
+
+
+def _users(session: AsyncSession, redis: Redis) -> UserService:
+    return UserService(session, redis)
 
 
 def _set_session_cookie(response: Response, session_id: str) -> None:
@@ -314,3 +313,120 @@ async def confirm_totp_enroll(
     response = JSONResponse(content={"backupCodes": codes})
     _set_session_cookie(response, session_id)
     return response
+
+
+@router.post("/invites", status_code=201)
+async def create_invite(
+    payload: InviteRequest,
+    request: Request,
+    principal: Annotated[
+        dict[str, Any], Depends(require_permission(Permission.USERS_INVITE))
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> Response:
+    await _invites(session, redis).create(
+        principal,
+        str(payload.email),
+        payload.role,
+        payload.full_name,
+        ip=_client_ip(request),
+    )
+    return Response(status_code=201)
+
+
+@router.post("/public/invites/accept")
+async def accept_invite(
+    payload: AcceptInviteRequest,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> JSONResponse:
+    principal = await _invites(session, redis).accept(
+        payload.token, payload.password, ip=_client_ip(request)
+    )
+    session_id = str(principal.pop("sessionId"))
+    response = JSONResponse(content=principal)
+    _set_session_cookie(response, session_id)
+    if principal.get("scope") == "mfa_enroll_only":
+        response.set_cookie(
+            key="nexus_preauth",
+            value=session_id,
+            httponly=True,
+            samesite="lax",
+            path="/",
+            max_age=600,
+            secure=False,
+        )
+    return response
+
+
+@router.get("/users")
+async def list_users(
+    principal: Annotated[
+        dict[str, Any], Depends(require_permission(Permission.USERS_READ))
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> list[dict[str, Any]]:
+    return await _users(session, redis).list_users(principal)
+
+
+@router.post("/users/{user_id}/deactivation")
+async def deactivate_user(
+    user_id: UUID,
+    request: Request,
+    principal: Annotated[
+        dict[str, Any], Depends(require_permission(Permission.USERS_MANAGE))
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> dict[str, Any]:
+    return await _users(session, redis).deactivate(
+        principal, user_id, ip=_client_ip(request)
+    )
+
+
+@router.patch("/users/{user_id}/role")
+async def change_user_role(
+    user_id: UUID,
+    payload: ChangeRoleRequest,
+    request: Request,
+    principal: Annotated[
+        dict[str, Any], Depends(require_permission(Permission.USERS_MANAGE))
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> dict[str, Any]:
+    return await _users(session, redis).change_role(
+        principal, user_id, payload.role, ip=_client_ip(request)
+    )
+
+
+@router.get("/tenant")
+async def get_tenant(
+    principal: Annotated[
+        dict[str, Any], Depends(require_permission(Permission.TENANT_SETTINGS_READ))
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> dict[str, Any]:
+    return await _users(session, redis).get_tenant(principal)
+
+
+@router.patch("/tenant")
+async def patch_tenant(
+    payload: PatchTenantRequest,
+    request: Request,
+    principal: Annotated[
+        dict[str, Any], Depends(require_permission(Permission.TENANT_SETTINGS_WRITE))
+    ],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> dict[str, Any]:
+    return await _users(session, redis).patch_tenant(
+        principal,
+        company_name=payload.company_name,
+        slug=payload.slug,
+        ip=_client_ip(request),
+    )

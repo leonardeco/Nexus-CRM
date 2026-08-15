@@ -36,7 +36,8 @@ from app.modules.tenancy.models import Tenant
 from app.modules.tenancy.provisioner import TenantProvisioner
 from app.worker import enqueue_job
 
-_MFA_ROLES = frozenset({"administrador", "gerente"})
+MFA_ROLES = frozenset({"administrador", "gerente"})
+_MFA_ROLES = MFA_ROLES
 _INVALID_CREDENTIALS = AppError(
     401,
     "invalid_credentials",
@@ -69,7 +70,9 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _principal(user: User, tenant: Tenant, email: str, *, scope: str) -> dict[str, Any]:
+def build_principal(
+    user: User, tenant: Tenant, email: str, *, scope: str
+) -> dict[str, Any]:
     return {
         "userId": str(user.id),
         "tenantId": str(tenant.id),
@@ -318,7 +321,7 @@ class AuthService:
         )
         await self._session.commit()
         if user.role in _MFA_ROLES and user.mfa_status == "pending":
-            principal = _principal(
+            principal = build_principal(
                 user, tenant, identity.email, scope="mfa_enroll_only"
             )
             session_id = await self._sessions.create(
@@ -332,7 +335,7 @@ class AuthService:
         if user.role in _MFA_ROLES and user.mfa_status == "enrolled":
             challenge_id = await self._sessions.create_mfa_challenge(user.id)
             return LoginResult(status="mfa_required", mfa_challenge_id=challenge_id)
-        principal = _principal(user, tenant, identity.email, scope="full")
+        principal = build_principal(user, tenant, identity.email, scope="full")
         session_id = await self._sessions.create(principal, scope="full")
         return LoginResult(
             status="authenticated", principal=principal, session_id=session_id
@@ -359,7 +362,7 @@ class AuthService:
             )
         self._mfa.verify_login(user, code)
         tenant, identity = await self._tenant_and_email(user)
-        principal = _principal(user, tenant, identity.email, scope="full")
+        principal = build_principal(user, tenant, identity.email, scope="full")
         session_id = await self._sessions.create(principal, scope="full")
         await self._sessions.delete_mfa_challenge(challenge_id)
         await self._audit.append(
@@ -410,7 +413,7 @@ class AuthService:
             schema_name=tenant.schema_name,
         )
         await self._session.commit()
-        principal = _principal(user, tenant, identity.email, scope="full")
+        principal = build_principal(user, tenant, identity.email, scope="full")
         session_id = await self._sessions.create(principal, scope="full")
         return codes, session_id, principal
 
