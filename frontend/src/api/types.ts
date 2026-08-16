@@ -84,6 +84,57 @@ export type AuditPage = {
   nextCursor?: string;
 };
 
+export type ConsentStatus = "unknown" | "granted" | "denied";
+
+export type ConsentBasis =
+  | "consentimiento"
+  | "contrato"
+  | "interes_legitimo"
+  | "obligacion_legal";
+
+export type Account = {
+  id: string;
+  name: string;
+  industry?: string | null;
+  region?: string | null;
+  website?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  ownerUserId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Contact = {
+  id: string;
+  accountId?: string | null;
+  fullName: string;
+  jobTitle?: string | null;
+  primaryEmail?: string | null;
+  primaryPhone?: string | null;
+  emails: string[];
+  phones: string[];
+  social: Record<string, string>;
+  address?: string | null;
+  notes?: string | null;
+  ownerUserId?: string | null;
+  consentStatus: ConsentStatus;
+  consentBasis?: ConsentBasis | null;
+  consentRecordedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ContactPage = {
+  items: Contact[];
+  nextCursor?: string;
+};
+
+export type AccountPage = {
+  items: Account[];
+  nextCursor?: string;
+};
+
 export type SignupRequest = {
   companyName: string;
   slug: string;

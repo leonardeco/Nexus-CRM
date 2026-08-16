@@ -6,6 +6,10 @@ import type { SessionPrincipal } from "../api/types";
 import { ArcoInboxPage } from "../features/arco/ArcoInboxPage";
 import { PublicArcoPage } from "../features/arco/PublicArcoPage";
 import { AuditPage } from "../features/audit/AuditPage";
+import { AccountDetailPage } from "../features/accounts/AccountDetailPage";
+import { AccountsPage } from "../features/accounts/AccountsPage";
+import { ContactDetailPage } from "../features/contacts/ContactDetailPage";
+import { ContactsPage } from "../features/contacts/ContactsPage";
 import { AcceptInvitePage } from "../features/auth/AcceptInvitePage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { MfaEnrollPage } from "../features/auth/MfaEnrollPage";
@@ -108,6 +112,10 @@ export function AppRouter() {
           }
         >
           <Route path="perfil" element={<ProfilePage />} />
+          <Route path="contactos" element={<ContactsPage />} />
+          <Route path="contactos/:contactId" element={<ContactDetailPage />} />
+          <Route path="cuentas" element={<AccountsPage />} />
+          <Route path="cuentas/:accountId" element={<AccountDetailPage />} />
           <Route
             path="configuracion"
             element={

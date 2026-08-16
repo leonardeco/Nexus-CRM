@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Building2,
+  Contact,
   FileText,
   LogOut,
   Menu,
@@ -14,6 +16,11 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuthStore } from "../stores/auth-store";
 import { Button } from "../ui/Button";
+
+const CORE_LINKS = [
+  { to: "/app/contactos", label: "Contactos", icon: Contact },
+  { to: "/app/cuentas", label: "Cuentas", icon: Building2 },
+] as const;
 
 const ADMIN_LINKS = [
   { to: "/app/configuracion", label: "Configuración", icon: Settings },
@@ -43,6 +50,7 @@ export function AppShell() {
 
   const links = [
     { to: "/app/perfil", label: "Perfil", icon: UserRound },
+    ...CORE_LINKS,
     ...(isAdmin ? ADMIN_LINKS : []),
   ];
 
