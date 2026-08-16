@@ -3,6 +3,9 @@
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
+.cursorrules
+*.docx
+~$*
 __pycache__/
 .venv/
 node_modules/
