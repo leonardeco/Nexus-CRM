@@ -159,7 +159,10 @@ class ContactsService:
                 SELECT {ACCOUNT_COLS}
                 FROM accounts
                 WHERE archived_at IS NULL
-                  AND (:q IS NULL OR lower(name) LIKE :q)
+                  AND (
+                    CAST(:q AS text) IS NULL
+                    OR lower(name) LIKE CAST(:q AS text)
+                  )
                   AND (
                     CAST(:cursor_id AS uuid) IS NULL
                     OR (created_at, id) < (
@@ -359,9 +362,9 @@ class ContactsService:
                 FROM contacts
                 WHERE archived_at IS NULL
                   AND (
-                    :q IS NULL
-                    OR lower(full_name) LIKE :q
-                    OR lower(primary_email) LIKE :q
+                    CAST(:q AS text) IS NULL
+                    OR lower(full_name) LIKE CAST(:q AS text)
+                    OR lower(primary_email) LIKE CAST(:q AS text)
                   )
                   AND (
                     CAST(:account_id AS uuid) IS NULL
