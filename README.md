@@ -208,6 +208,8 @@ Roles: `administrador` · `gerente` · `vendedor`. Gerente y vendedor no ven sup
 
 Lo que **no** está aquí —y no debe leerse en este README como si lo estuviera—: WhatsApp, IA, facturación, SSO, y —dentro de M2— arrastrar-y-soltar, catálogo de productos (RF-017), propuestas PDF (RF-018) y alertas por actividad (RF-014).
 
+Backlog y diario de trabajo: [`pendientes.md`](pendientes.md) · [`bitacora.md`](bitacora.md).
+
 <p align="center">
   <img src="docs/assets/nexus-mark.svg" width="48" alt="NEXUS">
   <br>
