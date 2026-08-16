@@ -11,6 +11,7 @@ from app.modules.arco.router import router as arco_router
 from app.modules.audit.router import router as audit_router
 from app.modules.contacts.router import router as contacts_router
 from app.modules.identity.router import router as identity_router
+from app.modules.pipeline.router import router as pipeline_router
 
 app = FastAPI(title="NEXUS CRM")
 register_errors(app)
@@ -19,6 +20,7 @@ app.include_router(identity_router)
 app.include_router(arco_router)
 app.include_router(audit_router)
 app.include_router(contacts_router)
+app.include_router(pipeline_router)
 
 
 @app.get("/api/v1/healthz")
