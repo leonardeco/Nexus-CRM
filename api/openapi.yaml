@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: NEXUS CRM API
-  version: 1.1.0
-  description: Slices A (Foundation) and B (Contacts & Accounts). Cookie session + public ops. RFC 9457 errors. JSON camelCase.
+  version: 1.2.0
+  description: Slices A (Foundation), B (Contacts & Accounts) and C (Sales Pipeline & Deals). Cookie session + public ops. RFC 9457 errors. JSON camelCase.
 servers:
   - url: /api/v1
 tags:
@@ -15,6 +15,8 @@ tags:
   - name: audit
   - name: accounts
   - name: contacts
+  - name: pipelines
+  - name: deals
 security:
   - cookieAuth: []
 paths:
@@ -852,6 +854,382 @@ paths:
           $ref: "#/components/responses/Problem"
         "422":
           $ref: "#/components/responses/Problem"
+  /pipelines:
+    get:
+      tags: [pipelines]
+      operationId: listPipelines
+      description: Active pipelines, each with ordered stages. Requires pipeline.read.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelinePage"
+        "403":
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [pipelines]
+      operationId: createPipeline
+      description: Requires pipeline.manage. Setting isDefault clears the previous default.
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PipelineCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pipeline"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /pipelines/{id}:
+    patch:
+      tags: [pipelines]
+      operationId: updatePipeline
+      description: Requires pipeline.manage.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PipelinePatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pipeline"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /pipelines/{id}/archive:
+    post:
+      tags: [pipelines]
+      operationId: archivePipeline
+      description: Requires pipeline.manage. 422 if the pipeline is default or holds open deals.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pipeline"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /pipelines/{id}/stages:
+    post:
+      tags: [pipelines]
+      operationId: addStage
+      description: Requires pipeline.manage. Appended at the last position.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StageCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stage"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /pipelines/{id}/stages/reorder:
+    post:
+      tags: [pipelines]
+      operationId: reorderStages
+      description: Requires pipeline.manage. stageIds must be the full set of the pipeline's stages.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StageReorder"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pipeline"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /stages/{id}:
+    patch:
+      tags: [pipelines]
+      operationId: updateStage
+      description: Requires pipeline.manage.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StagePatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stage"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+    delete:
+      tags: [pipelines]
+      operationId: deleteStage
+      description: Requires pipeline.manage. 204 on success; 422 if the stage holds active deals or is the pipeline's last stage.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "204":
+          description: Stage deleted
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /pipelines/{id}/board:
+    get:
+      tags: [pipelines]
+      operationId: pipelineBoard
+      description: Open deals grouped by stage, ordered by stageChangedAt DESC. Requires pipeline.read.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /pipelines/{id}/forecast:
+    get:
+      tags: [pipelines]
+      operationId: pipelineForecast
+      description: Weighted forecast over open deals plus monthly projection. Money as strings. Requires pipeline.read.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Forecast"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /deals:
+    get:
+      tags: [deals]
+      operationId: listDeals
+      description: Active deals only. Keyset pagination by (createdAt, id) DESC. Requires pipeline.read.
+      parameters:
+        - { name: pipelineId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: stageId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [open, won, lost] } }
+        - { name: q, in: query, required: false, schema: { type: string } }
+        - { name: cursor, in: query, required: false, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealPage"
+        "403":
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [deals]
+      operationId: createDeal
+      description: Requires deal.write. Stage defaults to the pipeline's first; probability defaults to the stage's. Writes an initial stage event.
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /deals/{id}:
+    get:
+      tags: [deals]
+      operationId: getDeal
+      description: 404 if archived or missing. Requires pipeline.read.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [deals]
+      operationId: updateDeal
+      description: Requires deal.write.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealPatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /deals/{id}/stage:
+    post:
+      tags: [deals]
+      operationId: moveDealStage
+      description: Requires deal.write. toStageId must belong to the deal's pipeline (else 422). Records an event, sets stageChangedAt=now and probability from the target stage.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealStageMove"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /deals/{id}/status:
+    post:
+      tags: [deals]
+      operationId: setDealStatus
+      description: Requires deal.write. status open clears lostReason.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealStatusRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /deals/{id}/archive:
+    post:
+      tags: [deals]
+      operationId: archiveDeal
+      description: Soft-delete. Requires deal.write.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /deals/{id}/history:
+    get:
+      tags: [deals]
+      operationId: dealHistory
+      description: Append-only stage events with resolved stage names, newest first. Requires pipeline.read.
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealHistory"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     cookieAuth:
@@ -1143,6 +1521,18 @@ components:
             - contact.archived
             - contact.consent.recorded
             - contact.assigned
+            - pipeline.created
+            - pipeline.updated
+            - pipeline.archived
+            - stage.created
+            - stage.updated
+            - stage.reordered
+            - stage.deleted
+            - deal.created
+            - deal.updated
+            - deal.stage_changed
+            - deal.status_changed
+            - deal.archived
         ipAddress: { type: string }
     ConsentStatus:
       type: string
@@ -1286,3 +1676,211 @@ components:
       type: object
       properties:
         ownerUserId: { type: string, format: uuid, nullable: true }
+    Stage:
+      type: object
+      required: [id, pipelineId, name, position, probability, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        pipelineId: { type: string, format: uuid }
+        name: { type: string }
+        position: { type: integer }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        rottingDays: { type: integer, nullable: true, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Pipeline:
+      type: object
+      required: [id, name, isDefault, stages, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        isDefault: { type: boolean }
+        archivedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Stage"
+    PipelinePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pipeline"
+    PipelineCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        isDefault: { type: boolean, default: false }
+    PipelinePatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        isDefault: { type: boolean }
+    StageCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        probability: { type: integer, minimum: 0, maximum: 100, default: 0 }
+        rottingDays: { type: integer, minimum: 1, nullable: true }
+    StagePatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        rottingDays: { type: integer, minimum: 1, nullable: true }
+    StageReorder:
+      type: object
+      required: [stageIds]
+      properties:
+        stageIds:
+          type: array
+          items: { type: string, format: uuid }
+    Deal:
+      type: object
+      required: [id, pipelineId, stageId, name, value, currency, status, stageChangedAt, daysInStage, isRotting, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        pipelineId: { type: string, format: uuid }
+        stageId: { type: string, format: uuid }
+        name: { type: string }
+        value: { type: string, description: Decimal string with 2 places to avoid float drift }
+        currency: { type: string }
+        contactId: { type: string, format: uuid, nullable: true }
+        accountId: { type: string, format: uuid, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+        closeDate: { type: string, format: date, nullable: true }
+        probability: { type: integer, minimum: 0, maximum: 100, nullable: true }
+        status: { type: string, enum: [open, won, lost] }
+        lostReason: { type: string, nullable: true }
+        stageChangedAt: { type: string, format: date-time }
+        daysInStage: { type: integer }
+        isRotting: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DealPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Deal"
+        nextCursor: { type: string }
+    DealCreate:
+      type: object
+      required: [name, pipelineId]
+      properties:
+        name: { type: string, minLength: 1 }
+        pipelineId: { type: string, format: uuid }
+        stageId: { type: string, format: uuid, nullable: true }
+        value: { type: string, nullable: true }
+        currency: { type: string, nullable: true }
+        contactId: { type: string, format: uuid, nullable: true }
+        accountId: { type: string, format: uuid, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+        closeDate: { type: string, format: date, nullable: true }
+        probability: { type: integer, minimum: 0, maximum: 100, nullable: true }
+    DealPatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        value: { type: string }
+        currency: { type: string }
+        contactId: { type: string, format: uuid, nullable: true }
+        accountId: { type: string, format: uuid, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+        closeDate: { type: string, format: date, nullable: true }
+        probability: { type: integer, minimum: 0, maximum: 100, nullable: true }
+    DealStageMove:
+      type: object
+      required: [toStageId]
+      properties:
+        toStageId: { type: string, format: uuid }
+        reason: { type: string, nullable: true }
+    DealStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [open, won, lost] }
+        lostReason: { type: string, nullable: true }
+    BoardColumn:
+      type: object
+      required: [stage, deals]
+      properties:
+        stage: { $ref: "#/components/schemas/Stage" }
+        deals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Deal"
+    Board:
+      type: object
+      required: [pipeline, stages]
+      properties:
+        pipeline: { $ref: "#/components/schemas/Pipeline" }
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/BoardColumn"
+    ForecastStage:
+      type: object
+      required: [stageId, name, count, sum, weighted]
+      properties:
+        stageId: { type: string, format: uuid }
+        name: { type: string }
+        count: { type: integer }
+        sum: { type: string }
+        weighted: { type: string }
+    ForecastMonth:
+      type: object
+      required: [month, sum, weighted]
+      properties:
+        month: { type: string, example: "2026-09" }
+        sum: { type: string }
+        weighted: { type: string }
+    Forecast:
+      type: object
+      required: [pipelineId, currency, stages, totals, months]
+      properties:
+        pipelineId: { type: string, format: uuid }
+        currency: { type: string }
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastStage"
+        totals:
+          type: object
+          required: [count, sum, weighted]
+          properties:
+            count: { type: integer }
+            sum: { type: string }
+            weighted: { type: string }
+        months:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForecastMonth"
+    DealHistoryEvent:
+      type: object
+      required: [id, toStageId, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromStageId: { type: string, format: uuid, nullable: true }
+        fromStageName: { type: string, nullable: true }
+        toStageId: { type: string, format: uuid, nullable: true }
+        toStageName: { type: string, nullable: true }
+        reason: { type: string, nullable: true }
+        actorEmail: { type: string, nullable: true }
+        occurredAt: { type: string, format: date-time }
+    DealHistory:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DealHistoryEvent"

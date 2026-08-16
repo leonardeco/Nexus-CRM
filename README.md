@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/slices-A_Foundation_·_B_Contactos-2563EB?style=flat-square" alt="Slices A y B">
+  <img src="https://img.shields.io/badge/slices-A_Foundation_·_B_Contactos_·_C_Pipeline-2563EB?style=flat-square" alt="Slices A, B y C">
   <img src="https://img.shields.io/badge/version-0.1.0-0F172A?style=flat-square" alt="0.1.0">
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12">
   <img src="https://img.shields.io/badge/FastAPI-async-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
@@ -23,16 +23,17 @@
 
 NEXUS no arranca como un CRUD genérico. El corte **Foundation** deja listo el suelo que el resto del CRM no puede improvisar después: **una empresa = un tenant**, **un correo = un tenant en toda la plataforma**, sesiones duras, roles de verdad y **Ley 1581** (habeas data + canal ARCO).
 
-Este repositorio contiene los **slices A (Foundation) y B (Contactos y cuentas)**. Pipeline, WhatsApp, copilot NEXUS AI y el dashboard comercial están fuera de este árbol a propósito.
+Este repositorio contiene los **slices A (Foundation), B (Contactos y cuentas) y C (Pipeline de ventas)**. WhatsApp, copilot NEXUS AI y el dashboard comercial están fuera de este árbol a propósito.
 
 | Listo ahora | Siguiente |
 |---|---|
-| Alta self-serve + primer Administrador | M2 Pipeline Kanban |
-| Consentimiento, verificación de correo, recovery | M4 Inbox WhatsApp-first |
-| MFA TOTP obligatorio Admin/Gerente | M3 Copilot (LangGraph) |
-| Invitaciones, cupo de asientos, RBAC | M7 Dashboard |
-| ARCO público + bandeja Admin + auditoría inmutable | M5 Marketing |
-| **M1 Contactos y cuentas** con habeas data por contacto | M6 Helpdesk |
+| Alta self-serve + primer Administrador | M4 Inbox WhatsApp-first |
+| Consentimiento, verificación de correo, recovery | M3 Copilot (LangGraph) |
+| MFA TOTP obligatorio Admin/Gerente | M7 Dashboard |
+| Invitaciones, cupo de asientos, RBAC | M5 Marketing |
+| ARCO público + bandeja Admin + auditoría inmutable | M6 Helpdesk |
+| **M1 Contactos y cuentas** con habeas data por contacto | RF-014 alertas por actividad · RF-017 catálogo · RF-018 propuestas PDF |
+| **M2 Pipeline Kanban**: negocios, etapas, historial, forecast, rotting | |
 
 ---
 
@@ -188,23 +189,27 @@ Nexus-CRM/
 | `/invitar/aceptar` | Aceptar invitación |
 | `/t/:slug/arco` | ARCO público |
 | `/app/perfil` | Perfil (todos los roles) |
+| `/app/pipeline` | Tablero Kanban de negocios (todos los roles) |
+| `/app/pipeline/:dealId` | Detalle del negocio: edición, movimiento e historial |
+| `/app/forecast` | Forecast ponderado + proyección mensual (todos los roles) |
+| `/app/pipelines` | Gestión de pipelines y etapas (Admin y Gerente) |
 | `/app/configuracion` | Empresa (Admin) |
 | `/app/usuarios` | Usuarios e invitaciones (Admin) |
 | `/app/arco` | Bandeja ARCO (Admin) |
 | `/app/auditoria` | Auditoría (Admin) |
 
-Roles: `administrador` · `gerente` · `vendedor`. Gerente y vendedor no ven superficies de Admin, pero sí gestionan contactos y cuentas.
+Roles: `administrador` · `gerente` · `vendedor`. Gerente y vendedor no ven superficies de Admin, pero sí gestionan contactos, cuentas y negocios. La gestión de pipelines y etapas (`pipeline.manage`) es solo de Admin y Gerente; el Vendedor crea, edita y mueve negocios pero no altera etapas.
 
 ---
 
 ## Estado
 
-**Slice A (Foundation)** y **Slice B (Contactos y cuentas)** están implementados, cubiertos por pytest y Vitest, y publicados en esta rama. B agrega el modelo de contactos/cuentas aislado por tenant, habeas data por contacto, asignación de responsable, archivado suave (soft-delete) y su SPA en español para los tres roles.
+**Slice A (Foundation)**, **Slice B (Contactos y cuentas)** y **Slice C (Pipeline de ventas)** están implementados, cubiertos por pytest y Vitest, y publicados en esta rama. C agrega pipelines con etapas ordenadas (un pipeline "Ventas" por defecto sembrado por migración), negocios (deals) con movimiento entre etapas e historial append-only con motivo, estados ganado/perdido, tablero Kanban, forecast ponderado con proyección mensual e indicador de estancamiento (rotting) —todo aislado por tenant y auditado— más su SPA en español para los tres roles.
 
-Lo que **no** está aquí —y no debe leerse en este README como si lo estuviera—: pipeline, WhatsApp, IA, facturación, SSO.
+Lo que **no** está aquí —y no debe leerse en este README como si lo estuviera—: WhatsApp, IA, facturación, SSO, y —dentro de M2— arrastrar-y-soltar, catálogo de productos (RF-017), propuestas PDF (RF-018) y alertas por actividad (RF-014).
 
 <p align="center">
   <img src="docs/assets/nexus-mark.svg" width="48" alt="NEXUS">
   <br>
-  <sub>Lanxa Technology · NEXUS CRM · Foundation + Contactos 0.1.0</sub>
+  <sub>Lanxa Technology · NEXUS CRM · Foundation + Contactos + Pipeline 0.1.0</sub>
 </p>
