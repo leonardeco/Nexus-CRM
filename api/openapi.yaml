@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: NEXUS CRM Foundation API
-  version: 1.0.0
-  description: Slice A only. Cookie session + public ops. RFC 9457 errors. JSON camelCase.
+  title: NEXUS CRM API
+  version: 1.1.0
+  description: Slices A (Foundation) and B (Contacts & Accounts). Cookie session + public ops. RFC 9457 errors. JSON camelCase.
 servers:
   - url: /api/v1
 tags:
@@ -13,6 +13,8 @@ tags:
   - name: users
   - name: arco
   - name: audit
+  - name: accounts
+  - name: contacts
 security:
   - cookieAuth: []
 paths:
@@ -579,6 +581,277 @@ paths:
                 $ref: "#/components/schemas/AuditPage"
         "403":
           $ref: "#/components/responses/Problem"
+  /accounts:
+    get:
+      tags: [accounts]
+      operationId: listAccounts
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountPage"
+        "403":
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [accounts]
+      operationId: createAccount
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /accounts/{id}:
+    get:
+      tags: [accounts]
+      operationId: getAccount
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [accounts]
+      operationId: updateAccount
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountPatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /accounts/{id}/archive:
+    post:
+      tags: [accounts]
+      operationId: archiveAccount
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /accounts/{id}/contacts:
+    get:
+      tags: [accounts, contacts]
+      operationId: listAccountContacts
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /contacts:
+    get:
+      tags: [contacts]
+      operationId: listContacts
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactPage"
+        "403":
+          $ref: "#/components/responses/Problem"
+    post:
+      tags: [contacts]
+      operationId: createContact
+      parameters:
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactCreate"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /contacts/{id}:
+    get:
+      tags: [contacts]
+      operationId: getContact
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+    patch:
+      tags: [contacts]
+      operationId: updateContact
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactPatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /contacts/{id}/archive:
+    post:
+      tags: [contacts]
+      operationId: archiveContact
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /contacts/{id}/consent:
+    post:
+      tags: [contacts]
+      operationId: recordContactConsent
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsentRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /contacts/{id}/assignment:
+    post:
+      tags: [contacts]
+      operationId: assignContact
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/CsrfClient"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignmentRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     cookieAuth:
@@ -593,6 +866,11 @@ components:
       required: true
       schema: { type: string, format: uuid }
     ArcoId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ResourceId:
       name: id
       in: path
       required: true
@@ -857,4 +1135,154 @@ components:
             - auth.mfa.enrolled
             - auth.email.verified
             - auth.password.reset
+            - account.created
+            - account.updated
+            - account.archived
+            - contact.created
+            - contact.updated
+            - contact.archived
+            - contact.consent.recorded
+            - contact.assigned
         ipAddress: { type: string }
+    ConsentStatus:
+      type: string
+      enum: [unknown, granted, denied]
+    ConsentBasis:
+      type: string
+      enum: [consentimiento, contrato, interes_legitimo, obligacion_legal]
+    Account:
+      type: object
+      required: [id, name, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        industry: { type: string, nullable: true }
+        region: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AccountCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        industry: { type: string, nullable: true }
+        region: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+    AccountPatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        industry: { type: string, nullable: true }
+        region: { type: string, nullable: true }
+        website: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+    AccountPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+        nextCursor: { type: string }
+    Contact:
+      type: object
+      required: [id, fullName, emails, phones, social, consentStatus, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid, nullable: true }
+        fullName: { type: string }
+        jobTitle: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        emails:
+          type: array
+          items: { type: string }
+        phones:
+          type: array
+          items: { type: string }
+        social:
+          type: object
+          additionalProperties: { type: string }
+        address: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+        consentStatus: { $ref: "#/components/schemas/ConsentStatus" }
+        consentBasis:
+          oneOf:
+            - $ref: "#/components/schemas/ConsentBasis"
+          nullable: true
+        consentRecordedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ContactCreate:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 1 }
+        accountId: { type: string, format: uuid, nullable: true }
+        jobTitle: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        emails:
+          type: array
+          items: { type: string }
+        phones:
+          type: array
+          items: { type: string }
+        social:
+          type: object
+          additionalProperties: { type: string }
+        address: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        ownerUserId: { type: string, format: uuid, nullable: true }
+    ContactPatch:
+      type: object
+      properties:
+        fullName: { type: string, minLength: 1 }
+        accountId: { type: string, format: uuid, nullable: true }
+        jobTitle: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        emails:
+          type: array
+          items: { type: string }
+        phones:
+          type: array
+          items: { type: string }
+        social:
+          type: object
+          additionalProperties: { type: string }
+        address: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+    ContactPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contact"
+        nextCursor: { type: string }
+    ConsentRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/ConsentStatus" }
+        basis:
+          oneOf:
+            - $ref: "#/components/schemas/ConsentBasis"
+          nullable: true
+    AssignmentRequest:
+      type: object
+      properties:
+        ownerUserId: { type: string, format: uuid, nullable: true }

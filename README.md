@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/slice-A_Foundation-2563EB?style=flat-square" alt="Slice A Foundation">
+  <img src="https://img.shields.io/badge/slices-A_Foundation_·_B_Contactos-2563EB?style=flat-square" alt="Slices A y B">
   <img src="https://img.shields.io/badge/version-0.1.0-0F172A?style=flat-square" alt="0.1.0">
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12">
   <img src="https://img.shields.io/badge/FastAPI-async-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
@@ -23,15 +23,16 @@
 
 NEXUS no arranca como un CRUD genérico. El corte **Foundation** deja listo el suelo que el resto del CRM no puede improvisar después: **una empresa = un tenant**, **un correo = un tenant en toda la plataforma**, sesiones duras, roles de verdad y **Ley 1581** (habeas data + canal ARCO).
 
-Este repositorio contiene **solo el slice A**. Contactos, pipeline, WhatsApp, copilot NEXUS AI y el dashboard comercial están fuera de este árbol a propósito.
+Este repositorio contiene los **slices A (Foundation) y B (Contactos y cuentas)**. Pipeline, WhatsApp, copilot NEXUS AI y el dashboard comercial están fuera de este árbol a propósito.
 
 | Listo ahora | Siguiente |
 |---|---|
-| Alta self-serve + primer Administrador | M1 Contactos / cuentas |
-| Consentimiento, verificación de correo, recovery | M2 Pipeline Kanban |
-| MFA TOTP obligatorio Admin/Gerente | M4 Inbox WhatsApp-first |
-| Invitaciones, cupo de asientos, RBAC | M3 Copilot (LangGraph) |
-| ARCO público + bandeja Admin + auditoría inmutable | M7 Dashboard |
+| Alta self-serve + primer Administrador | M2 Pipeline Kanban |
+| Consentimiento, verificación de correo, recovery | M4 Inbox WhatsApp-first |
+| MFA TOTP obligatorio Admin/Gerente | M3 Copilot (LangGraph) |
+| Invitaciones, cupo de asientos, RBAC | M7 Dashboard |
+| ARCO público + bandeja Admin + auditoría inmutable | M5 Marketing |
+| **M1 Contactos y cuentas** con habeas data por contacto | M6 Helpdesk |
 
 ---
 
@@ -192,18 +193,18 @@ Nexus-CRM/
 | `/app/arco` | Bandeja ARCO (Admin) |
 | `/app/auditoria` | Auditoría (Admin) |
 
-Roles: `administrador` · `gerente` · `vendedor`. Gerente y vendedor no ven superficies de Admin.
+Roles: `administrador` · `gerente` · `vendedor`. Gerente y vendedor no ven superficies de Admin, pero sí gestionan contactos y cuentas.
 
 ---
 
 ## Estado
 
-Foundation **A** está implementado, cubierto por pytest (AC-1 a AC-8) y Vitest, y publicado en esta rama.
+**Slice A (Foundation)** y **Slice B (Contactos y cuentas)** están implementados, cubiertos por pytest y Vitest, y publicados en esta rama. B agrega el modelo de contactos/cuentas aislado por tenant, habeas data por contacto, asignación de responsable, archivado suave (soft-delete) y su SPA en español para los tres roles.
 
-Lo que **no** está aquí —y no debe leerse en este README como si lo estuviera—: contactos, negocio, WhatsApp, IA, facturación, SSO.
+Lo que **no** está aquí —y no debe leerse en este README como si lo estuviera—: pipeline, WhatsApp, IA, facturación, SSO.
 
 <p align="center">
   <img src="docs/assets/nexus-mark.svg" width="48" alt="NEXUS">
   <br>
-  <sub>Lanxa Technology · NEXUS CRM · Foundation 0.1.0</sub>
+  <sub>Lanxa Technology · NEXUS CRM · Foundation + Contactos 0.1.0</sub>
 </p>

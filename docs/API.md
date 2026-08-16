@@ -1,6 +1,6 @@
-# NEXUS CRM Foundation — API notes
+# NEXUS CRM — API notes
 
-Contract source of truth: [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1, `info.version` 1.0.0).
+Contract source of truth: [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1, `info.version` 1.1.0). Covers Slice A (Foundation) and Slice B (Contacts & Accounts).
 
 Base path: `/api/v1`. JSON camelCase. Cookie `nexus_session` unless `security: []`. Mutating methods require header `X-Nexus-Client: web` (403 `csrf_rejected` otherwise). Errors: RFC 9457 `application/problem+json`.
 
@@ -46,6 +46,28 @@ Login `status` values in the contract: `authenticated`, `mfa_required`, `mfa_enr
 | GET | `/audit-events` | `listAudit` |
 
 Roles in the contract: `administrador`, `gerente`, `vendedor`. ARCO types: `acceso`, `rectificacion`, `cancelacion`, `oposicion`.
+
+## Contacts & Accounts (Slice B)
+
+Reads require `contacts.read`; writes require `contacts.write`. All three roles hold both permissions and see every contact/account in the tenant (`ownerUserId` is for assignment, not filtering). Lists are keyset-paginated `{ items, nextCursor? }` ordered by `(createdAt, id)` DESC. Archived rows are soft-deleted (`archivedAt`) and excluded from lists and GET-by-id (404).
+
+| Method | Path | operationId |
+|---|---|---|
+| GET | `/accounts` | `listAccounts` |
+| POST | `/accounts` | `createAccount` |
+| GET | `/accounts/{id}` | `getAccount` |
+| PATCH | `/accounts/{id}` | `updateAccount` |
+| POST | `/accounts/{id}/archive` | `archiveAccount` |
+| GET | `/accounts/{id}/contacts` | `listAccountContacts` |
+| GET | `/contacts` | `listContacts` |
+| POST | `/contacts` | `createContact` |
+| GET | `/contacts/{id}` | `getContact` |
+| PATCH | `/contacts/{id}` | `updateContact` |
+| POST | `/contacts/{id}/archive` | `archiveContact` |
+| POST | `/contacts/{id}/consent` | `recordContactConsent` |
+| POST | `/contacts/{id}/assignment` | `assignContact` |
+
+Habeas data: recording consent with `status: granted` requires a `basis` (`consentimiento`, `contrato`, `interes_legitimo`, `obligacion_legal`); otherwise `422 validation_error`. Audit events: `account.created/updated/archived`, `contact.created/updated/archived`, `contact.consent.recorded`, `contact.assigned`.
 
 ## Drift
 
