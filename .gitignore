@@ -1,5 +1,8 @@
 .env
 .pgdata/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 __pycache__/
 .venv/
 node_modules/
