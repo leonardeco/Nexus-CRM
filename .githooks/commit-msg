@@ -1,0 +1,16 @@
+#!/bin/sh
+# Drop AI / tool attribution trailers so published history looks human-authored.
+msg="$1"
+tmp="${1}.nexus-clean"
+
+# Portable: no GNU sed -i (breaks on Windows Git Bash paths with spaces).
+sed \
+  -e '/^Co-authored-by: Cursor/d' \
+  -e '/^Co-authored-by: cursoragent/d' \
+  -e '/^Co-authored-by:.*cursoragent@/d' \
+  -e '/^Made-with: Cursor/d' \
+  -e '/^Generated-by:/d' \
+  -e '/^🤖/d' \
+  "$msg" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$tmp" || exit 1
+
+mv "$tmp" "$msg"

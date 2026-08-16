@@ -1,0 +1,48 @@
+---
+description: Código, commits y push sin huella de IA; el autor es el contributor humano
+alwaysApply: true
+---
+
+# Sin huella de IA
+
+Este repo se publica como trabajo del contributor humano (identidad de `git config user.*`). Nunca dejes rastro de Cursor, Claude, Hydraia, GPT ni “AI assistant”.
+
+## Código y docs
+
+- No escribas comentarios, README, OpenAPI, CHANGELOG ni strings de UI que mencionen IA, generadores o herramientas de agente.
+- No metas rutas internas (`~/.config/hydraia`, `.cursor/`, “as an AI”).
+- No agregues `Co-authored-by`, badges “built with Cursor”, ni archivos `.docx` / lock de Word al git.
+
+## Commits
+
+Antes del primer `git commit` de la sesión:
+
+```
+git config core.hooksPath .githooks
+```
+
+Mensajes: conventional (`feat:`, `fix:`, `test:`, `docs:`, `chore:`), tono de un dev senior, **sin** trailers de IA.
+
+Tras cada commit, verifica:
+
+```
+git log -1 --format=%B
+```
+
+Si aparece `Co-authored-by: Cursor` (u otro trailer de herramienta), quítalo **solo en commits aún no publicados**:
+
+```
+git filter-branch -f --msg-filter "sed '/^Co-authored-by: Cursor/d; /^Co-authored-by: cursoragent/d'" @{u}..HEAD
+```
+
+Si no hay upstream, usa `HEAD~N..HEAD` del rango local sucio. No reescribas historia ya en `origin` salvo que el usuario lo pida.
+
+## Push
+
+- Publica commits ya limpios. No empujes un mensaje con trailer de Cursor.
+- No uses `--force` en `master`/`main` salvo que el usuario lo autorice (p. ej. para borrar huella que él pidió).
+- Preferir `git push` fast-forward; `--force-with-lease` solo si reescribiste commits locales no publicados y el remoto no divergió.
+
+## Identidad
+
+No cambies `user.name` / `user.email`. No inventes un autor. El commit queda a nombre de quien ya está configurado en esta máquina.
