@@ -10,5 +10,7 @@ class Permission(StrEnum):
     ARCO_INBOX_READ = "arco.inbox.read"
     ARCO_INBOX_WRITE = "arco.inbox.write"
     AUDIT_READ = "audit.read"
+    CONTACTS_READ = "contacts.read"
+    CONTACTS_WRITE = "contacts.write"
     PROFILE_READ = "profile.read"
     PROFILE_WRITE = "profile.write"
