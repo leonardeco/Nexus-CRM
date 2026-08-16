@@ -12,5 +12,8 @@ class Permission(StrEnum):
     AUDIT_READ = "audit.read"
     CONTACTS_READ = "contacts.read"
     CONTACTS_WRITE = "contacts.write"
+    PIPELINE_READ = "pipeline.read"
+    DEAL_WRITE = "deal.write"
+    PIPELINE_MANAGE = "pipeline.manage"
     PROFILE_READ = "profile.read"
     PROFILE_WRITE = "profile.write"
