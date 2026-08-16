@@ -238,6 +238,7 @@ class PipelineService:
             tenant, actor, ip, "pipeline.updated", {"pipelineId": str(pipeline_id)}
         )
         await self._session.commit()
+        await self._bind(tenant.schema_name)
         stages = await self._stages_for(pipeline_id)
         return _serialize_pipeline(row, stages)
 
@@ -411,6 +412,7 @@ class PipelineService:
             {"pipelineId": str(pipeline_id), "stageIds": given_ids},
         )
         await self._session.commit()
+        await self._bind(tenant.schema_name)
         stages = await self._stages_for(pipeline_id)
         row = await self._pipeline_row(pipeline_id)
         return _serialize_pipeline(row, stages)
