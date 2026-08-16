@@ -3,10 +3,13 @@ import {
   Building2,
   Contact,
   FileText,
+  GitBranch,
+  LayoutGrid,
   LogOut,
   Menu,
   Settings,
   Shield,
+  TrendingUp,
   UserRound,
   Users,
   X,
@@ -20,6 +23,12 @@ import { Button } from "../ui/Button";
 const CORE_LINKS = [
   { to: "/app/contactos", label: "Contactos", icon: Contact },
   { to: "/app/cuentas", label: "Cuentas", icon: Building2 },
+  { to: "/app/pipeline", label: "Pipeline", icon: LayoutGrid },
+  { to: "/app/forecast", label: "Forecast", icon: TrendingUp },
+] as const;
+
+const MANAGE_LINKS = [
+  { to: "/app/pipelines", label: "Pipelines", icon: GitBranch },
 ] as const;
 
 const ADMIN_LINKS = [
@@ -37,6 +46,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const isAdmin = principal?.role === "administrador";
+  const canManagePipelines = isAdmin || principal?.role === "gerente";
 
   const logout = useMutation({
     mutationFn: () => api<void>("/sessions/current", { method: "DELETE" }),
@@ -51,6 +61,7 @@ export function AppShell() {
   const links = [
     { to: "/app/perfil", label: "Perfil", icon: UserRound },
     ...CORE_LINKS,
+    ...(canManagePipelines ? MANAGE_LINKS : []),
     ...(isAdmin ? ADMIN_LINKS : []),
   ];
 

@@ -135,6 +135,106 @@ export type AccountPage = {
   nextCursor?: string;
 };
 
+export type Stage = {
+  id: string;
+  pipelineId: string;
+  name: string;
+  position: number;
+  probability: number;
+  rottingDays?: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Pipeline = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  archivedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  stages: Stage[];
+};
+
+export type PipelinePage = {
+  items: Pipeline[];
+};
+
+export type DealStatus = "open" | "won" | "lost";
+
+export type Deal = {
+  id: string;
+  pipelineId: string;
+  stageId: string;
+  name: string;
+  value: string;
+  currency: string;
+  contactId?: string | null;
+  accountId?: string | null;
+  ownerUserId?: string | null;
+  closeDate?: string | null;
+  probability?: number | null;
+  status: DealStatus;
+  lostReason?: string | null;
+  stageChangedAt: string;
+  daysInStage: number;
+  isRotting: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DealPage = {
+  items: Deal[];
+  nextCursor?: string;
+};
+
+export type BoardColumn = {
+  stage: Stage;
+  deals: Deal[];
+};
+
+export type Board = {
+  pipeline: Pipeline;
+  stages: BoardColumn[];
+};
+
+export type ForecastStage = {
+  stageId: string;
+  name: string;
+  count: number;
+  sum: string;
+  weighted: string;
+};
+
+export type ForecastMonth = {
+  month: string;
+  sum: string;
+  weighted: string;
+};
+
+export type Forecast = {
+  pipelineId: string;
+  currency: string;
+  stages: ForecastStage[];
+  totals: { count: number; sum: string; weighted: string };
+  months: ForecastMonth[];
+};
+
+export type DealHistoryEvent = {
+  id: string;
+  fromStageId?: string | null;
+  fromStageName?: string | null;
+  toStageId?: string | null;
+  toStageName?: string | null;
+  reason?: string | null;
+  actorEmail?: string | null;
+  occurredAt: string;
+};
+
+export type DealHistory = {
+  items: DealHistoryEvent[];
+};
+
 export type SignupRequest = {
   companyName: string;
   slug: string;

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import type { SessionPrincipal } from "../api/types";
+import type { Role, SessionPrincipal } from "../api/types";
 import { ArcoInboxPage } from "../features/arco/ArcoInboxPage";
 import { PublicArcoPage } from "../features/arco/PublicArcoPage";
 import { AuditPage } from "../features/audit/AuditPage";
@@ -10,6 +10,10 @@ import { AccountDetailPage } from "../features/accounts/AccountDetailPage";
 import { AccountsPage } from "../features/accounts/AccountsPage";
 import { ContactDetailPage } from "../features/contacts/ContactDetailPage";
 import { ContactsPage } from "../features/contacts/ContactsPage";
+import { PipelineBoardPage } from "../features/pipeline/PipelineBoardPage";
+import { DealDetailPage } from "../features/pipeline/DealDetailPage";
+import { ForecastPage } from "../features/pipeline/ForecastPage";
+import { PipelinesAdminPage } from "../features/pipeline/PipelinesAdminPage";
 import { AcceptInvitePage } from "../features/auth/AcceptInvitePage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { MfaEnrollPage } from "../features/auth/MfaEnrollPage";
@@ -63,9 +67,11 @@ function SessionGate({ children }: { children: ReactNode }) {
 function RequireSession({
   children,
   admin = false,
+  roles,
 }: {
   children: ReactNode;
   admin?: boolean;
+  roles?: Role[];
 }) {
   const principal = useAuthStore((state) => state.principal);
   const location = useLocation();
@@ -77,6 +83,9 @@ function RequireSession({
     return <Navigate to="/ingresar/mfa/enrolar" replace />;
   }
   if (admin && principal.role !== "administrador") {
+    return <Navigate to="/app/perfil" replace />;
+  }
+  if (roles && !roles.includes(principal.role)) {
     return <Navigate to="/app/perfil" replace />;
   }
   return children;
@@ -116,6 +125,17 @@ export function AppRouter() {
           <Route path="contactos/:contactId" element={<ContactDetailPage />} />
           <Route path="cuentas" element={<AccountsPage />} />
           <Route path="cuentas/:accountId" element={<AccountDetailPage />} />
+          <Route path="pipeline" element={<PipelineBoardPage />} />
+          <Route path="pipeline/:dealId" element={<DealDetailPage />} />
+          <Route path="forecast" element={<ForecastPage />} />
+          <Route
+            path="pipelines"
+            element={
+              <RequireSession roles={["administrador", "gerente"]}>
+                <PipelinesAdminPage />
+              </RequireSession>
+            }
+          />
           <Route
             path="configuracion"
             element={
